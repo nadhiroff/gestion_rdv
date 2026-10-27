@@ -146,4 +146,4 @@ sudo systemctl enable --now rdv-api
 - Rappel automatique par email 24h avant un rendez-vous accepté (via une tâche cron qui interroge `/api/admin/bookings`)
 - Export CSV des rendez-vous depuis l'espace admin
 - Plusieurs comptes admin nominatifs (au lieu d'un code partagé) si plusieurs personnes gèrent l'agenda
-- SMS de rappel (Twilio ou autre) en plus de l'email
+- SMS de rappel (Twilio ou autre) en plus de l'email# gestion_rdv
