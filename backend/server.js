@@ -42,14 +42,15 @@ const allowedOrigins = (process.env.FRONTEND_ORIGIN || '*')
   .split(',')
   .map((o) => o.trim())
   .filter(Boolean);
-app.use(cors({
-  origin: allowedOrigins.includes('*')
-    ? '*'
-    : (origin, callback) => {
-        // autorise aussi les requêtes sans origine (ex: curl, Postman)
-        if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-        else callback(new Error('Origine non autorisée par CORS: ' + origin));
-      },
+app.use(cors((req, callback) => {
+  if (allowedOrigins.includes('*')) return callback(null, { origin: '*' });
+  const origin = req.header('Origin');
+  // Toujours autoriser : requêtes sans origine (curl, Postman) et la page servie
+  // par ce même serveur (ex: http://localhost:4000 -> http://localhost:4000/api).
+  const sameOrigin = origin === `${req.protocol}://${req.get('host')}`;
+  if (!origin || sameOrigin || allowedOrigins.includes(origin)) return callback(null, { origin: true });
+  console.warn('Origine refusée par CORS:', origin, '(ajoutez-la à FRONTEND_ORIGIN dans .env)');
+  callback(null, { origin: false });
 }));
 
 // ---------- MySQL ----------
@@ -391,9 +392,11 @@ app.post('/api/bookings', bookingLimiter, async (req, res) => {
 // ---------- Auth admin ----------
 app.post('/api/admin/login', loginLimiter, async (req, res) => {
   try {
-    const { code } = req.body;
+    // String() : un code envoyé comme nombre (ex: 9865) faisait planter bcrypt -> "Erreur serveur"
+    const code = req.body && req.body.code != null ? String(req.body.code).trim() : '';
     if (!code) return res.status(400).json({ error: 'Code requis' });
     const settings = await getSettings();
+    if (!settings) return res.status(500).json({ error: 'Table settings vide : rejouez backend/db/schema.sql' });
     const ok = settings.admin_code_hash && (await bcrypt.compare(code, settings.admin_code_hash));
     if (!ok) return res.status(401).json({ error: 'Code incorrect' });
     res.json({ token: signAdminToken() });
@@ -766,6 +769,13 @@ app.delete('/api/admin/date-overrides/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Sert le frontend (frontend/index.html) à la racine, pour pouvoir ouvrir
+// directement http://localhost:4000 sans Apache en local.
+const FRONTEND_DIR = require('path').join(__dirname, '..', 'frontend');
+app.use(express.static(FRONTEND_DIR));
+// Espace administrateur sur son propre lien : http://localhost:4000/admin
+app.get(['/admin', '/admin/'], (req, res) => res.sendFile(require('path').join(FRONTEND_DIR, 'index.html')));
+
 // Middleware d'erreur global : capte tout ce qui n'a pas été géré plus haut
 // et répond proprement au lieu de laisser la requête planter le serveur.
 app.use((err, req, res, next) => {
@@ -779,7 +789,11 @@ const PORT = process.env.PORT || 4000;
 ensureAdminCode()
   .then(() => verifySmtp())
   .then(() => {
-    app.listen(PORT, () => console.log(`API démarrée sur le port ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`API démarrée sur le port ${PORT}`);
+      console.log(`Site disponible sur : http://localhost:${PORT}`);
+      console.log(`Espace admin      : http://localhost:${PORT}/admin`);
+    });
   })
   .catch((err) => {
     console.error('Impossible de se connecter à MySQL au démarrage:', err.message);

@@ -250,6 +250,18 @@
   .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
   .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
   .admin-grid > .panel { min-width: 0; }
+  .admin-intro { margin: 4px 0 0; color: var(--ink-soft); font-size: 0.86rem; }
+  .admin-nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px; margin-bottom: 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-sm); }
+  .admin-nav button { flex: 1 1 160px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 14px; border: none; border-radius: 8px; background: transparent; color: var(--ink-soft); font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background .18s, color .18s; }
+  .admin-nav button:hover { background: var(--surface-tint); color: var(--ink); }
+  .admin-nav button.active { background: var(--accent); color: #fff; }
+  .guide { background: var(--accent-soft); border: 1px solid #D3DBF7; border-radius: var(--radius); padding: 16px 18px; margin-bottom: 18px; }
+  .guide h4 { margin: 0 0 12px; display: flex; align-items: center; gap: 8px; font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; color: var(--accent-dark); }
+  .guide ol { list-style: none; margin: 0; padding: 0; counter-reset: step; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .guide li { counter-increment: step; display: flex; gap: 10px; font-size: 0.84rem; line-height: 1.5; color: var(--ink); }
+  .guide li::before { content: counter(step); flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 700; display: grid; place-items: center; }
+  .admin-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .admin-cols { grid-template-columns: 1fr; } }
   @media (max-width: 1400px) { .admin-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 700px) { .admin-grid { grid-template-columns: 1fr; } }
 
@@ -380,13 +392,20 @@ const API_DEV_URL = 'http://localhost:4000/api';
 const isLocalDev = ['localhost', '127.0.0.1', '', '::1'].includes(window.location.hostname) || window.location.protocol === 'file:';
 const API = isLocalDev ? API_DEV_URL : '/api';
 
+function isAdminUrl() {
+  return /\/admin\/?$/.test(window.location.pathname) || window.location.hash === '#admin';
+}
+
 const JOURS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 const JOURS_LONG = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const STATUS_LABEL = { pending: 'En attente', accepted: 'Accepté', rejected: 'Refusé' };
 
 /* ===================== État ===================== */
 const state = {
-  view: localStorage.getItem('rdv_view') || 'client',
+  // L'espace admin est sur un lien séparé : /admin (ou #admin si la page est ouverte en fichier)
+  view: isAdminUrl() ? 'admin' : 'client',
+  // Rubrique affichée dans l'admin : 'rdv' | 'reglages' | 'exceptions'
+  adminSection: (() => { try { return localStorage.getItem('rdv_admin_section') || 'rdv'; } catch (e) { return 'rdv'; } })(),
   cursor: (() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() }; })(),
   monthData: null,
   selectedDate: null,
@@ -572,7 +591,7 @@ function adminLogout() {
   });
 }
 function quitLogin() {
-  setView('client');
+  goToSite();
 }
 
 /* ===================== Admin : data ===================== */
@@ -599,7 +618,9 @@ async function loadBookings() {
   render();
 }
 function selectAdminDate(iso) {
-  state.filters = { date: iso, from: '', to: '', status: state.filters.status };
+  // Re-cliquer sur le jour déjà sélectionné le désélectionne (retour à tous les rendez-vous)
+  const date = state.filters.date === iso ? '' : iso;
+  state.filters = { date, from: '', to: '', status: state.filters.status };
   loadBookings();
 }
 function clearFilters() {
@@ -894,10 +915,10 @@ function render() {
         </svg>
         Prise de rendez-vous
       </div>
+      ${state.view === 'admin' ? `
       <div class="tabs">
-        <button class="tab ${state.view === 'client' ? 'active' : ''}" onclick="setView('client')">${ic('calendar', 16)} Réserver</button>
-        <button class="tab ${state.view === 'admin' ? 'active' : ''}" onclick="setView('admin')">${ic('settings', 16)} Administration</button>
-      </div>
+        <button class="tab" onclick="goToSite()">${ic('calendar', 16)} Voir le site</button>
+      </div>` : ''}
     </div>
     ${state.view === 'client' ? renderClient() : renderAdmin()}
     ${state.showBookingModal ? renderBookingModal() : ''}
@@ -940,10 +961,15 @@ function render() {
 }
 
 function setView(v) {
+  if (v === 'client') return goToSite();
   state.view = v;
-  localStorage.setItem('rdv_view', v);
   if (v === 'admin' && state.adminToken && !state.adminSettings) loadAdminData();
   render();
+}
+// Retour à la page publique (enlève /admin ou #admin de l'adresse)
+function goToSite() {
+  if (location.hash === '#admin') { location.hash = ''; location.reload(); return; }
+  location.href = location.pathname.replace(/\/admin\/?$/, '/') || '/';
 }
 
 /* ---- Calendrier (partagé client / admin) ---- */
@@ -1144,14 +1170,15 @@ function renderAdmin() {
     : (state.filters.from || state.filters.to) ? `${state.filters.from ? fmtDateShort(state.filters.from) : '…'} → ${state.filters.to ? fmtDateShort(state.filters.to) : '…'}`
     : 'Toutes les dates';
 
-  return `
-  <div class="page">
-    <div class="admin-top">
-      <h3 class="display" style="margin:0;font-size:1.3rem">Administration</h3>
-      <button class="btn btn-secondary btn-sm" onclick="adminLogout()">${ic('logout',15)} Déconnexion</button>
-    </div>
+  const section = state.adminSection;
+  const navBtn = (id, icon, label) => `<button class="${section === id ? 'active' : ''}" onclick="setAdminSection('${id}')">${ic(icon, 16)} ${label}</button>`;
+  const guide = (title, steps) => `
+    <div class="guide">
+      <h4>${ic('info', 16)} ${title}</h4>
+      <ol>${steps.map(st => `<li><span>${st}</span></li>`).join('')}</ol>
+    </div>`;
 
-    <div class="admin-grid" style="margin-bottom:18px">
+  const panelResponsable = `
       <div class="panel" style="margin-bottom:0">
         <h3>${ic('user', 18)} Responsable &amp; capacité</h3>
         <div class="sub">Qui reçoit les notifications, et combien de rendez-vous par jour</div>
@@ -1163,18 +1190,18 @@ function renderAdmin() {
         </div>
         <p class="sub" style="margin:0 0 14px;font-size:0.78rem">Cette valeur s'applique à tous les jours ouverts. Pour donner un nombre différent (ou un autre responsable) à une date ou une période précise, utilisez le panneau "Règles spéciales par date" ci-dessous — pas besoin de la changer ici pour ça.</p>
         <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
-      </div>
-
+      </div>`;
+  const panelJours = `
       <div class="panel" style="margin-bottom:0">
         <h3>${ic('ban', 18)} Jours fermés (récurrents)</h3>
         <div class="sub">Jours de la semaine jamais ouverts à la réservation</div>
         <div class="weekday-toggles">
           ${JOURS_LONG.map((j, idx) => `<button class="wd-chip ${joursFermesArr.includes(idx) ? 'off' : ''}" onclick="toggleClosedWeekday(${idx})">${j}</button>`).join('')}
         </div>
-        <p class="sub" style="margin:14px 0 4px">N'oubliez pas d'enregistrer après modification.</p>
+        <p class="sub" style="margin:14px 0 4px">Cliquez sur un jour pour le fermer (gris) ou le rouvrir, puis enregistrez.</p>
         <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
-      </div>
-
+      </div>`;
+  const panelBlock = `
       <div class="panel" style="margin-bottom:0" id="block-form-anchor">
         <h3>${ic('calendar', 18)} ${state.newBlock.id ? 'Modifier la période bloquée' : 'Bloquer une période'}</h3>
         <div class="sub">Congés, indisponibilité, jour férié… laissez "fin" vide pour un seul jour</div>
@@ -1198,8 +1225,8 @@ function renderAdmin() {
               </div>
             </div>`).join('')}
         </div>
-      </div>
-
+      </div>`;
+  const panelOverride = `
       <div class="panel" style="margin-bottom:0" id="override-form-anchor">
         <h3>${ic('users', 18)} ${state.newOverride.id ? 'Modifier la règle spéciale' : 'Règle spéciale par date'}</h3>
         <div class="sub">Sur une journée ou une période précise, choisissez un autre nombre max de rendez-vous et/ou un autre responsable — sinon le réglage global s'applique partout.</div>
@@ -1228,14 +1255,11 @@ function renderAdmin() {
               </div>
             </div>`).join('')}
         </div>
-      </div>
-    </div>
-
-    ${renderCalendar(state.monthData, 'admin')}
-
+      </div>`;
+  const panelBookings = `
     <div class="panel">
       <h3>${ic('users', 18)} Rendez-vous</h3>
-      <div class="sub">Cliquez sur une date du calendrier ci-dessus pour filtrer automatiquement</div>
+      <div class="sub">Cliquez sur un jour du calendrier pour filtrer — recliquez dessus pour tout réafficher</div>
 
       <div class="filters-bar">
         <div class="sel-date">${ic('calendar',16)} Date sélectionnée : <span class="val">${filterLabel}</span></div>
@@ -1275,18 +1299,70 @@ function renderAdmin() {
           </tbody>
         </table>
       </div>`}
+    </div>`;
+
+  let body;
+  if (section === 'reglages') {
+    body = guide("Réglages généraux — ils s'appliquent à tous les jours", [
+      "Indiquez le <b>nom et l'email du responsable</b> : c'est lui qui reçoit un email à chaque nouvelle demande.",
+      "Choisissez le <b>nombre maximum de rendez-vous par jour</b>. Une fois atteint, le jour s'affiche « Complet » pour les clients.",
+      "Cliquez sur les <b>jours de la semaine toujours fermés</b> (ils passent en gris), puis cliquez sur <b>Enregistrer</b>.",
+    ]) + `<div class="admin-cols">${panelResponsable}${panelJours}</div>`;
+  } else if (section === 'exceptions') {
+    body = guide('Congés & exceptions — pour des dates précises', [
+      "<b>Bloquer une période</b> : personne ne peut réserver ces jours-là (congés, jour férié…). Pour un seul jour, laissez la date de fin vide.",
+      "<b>Règle spéciale</b> : les jours restent ouverts, mais avec un autre nombre maximum et/ou un autre responsable qui reçoit les emails.",
+      "Ce que vous ajoutez apparaît sous chaque formulaire : le crayon pour modifier, la corbeille pour supprimer.",
+    ]) + `<div class="admin-cols">${panelBlock}${panelOverride}</div>`;
+  } else {
+    body = guide('Traiter les demandes de rendez-vous', [
+      "Chaque nouvelle demande arrive avec le statut <b>En attente</b>, et le responsable reçoit un email.",
+      "Cliquez sur un jour du calendrier pour n'afficher que ses rendez-vous. <b>Recliquez dessus</b> pour revenir à la liste complète.",
+      "Cliquez sur <b>Accepter</b> ou <b>Refuser</b> : le client reçoit automatiquement un email avec la réponse.",
+    ]) + renderCalendar(state.monthData, 'admin') + panelBookings;
+  }
+
+  return `
+  <div class="page">
+    <div class="admin-top">
+      <div>
+        <h3 class="display" style="margin:0;font-size:1.3rem">Administration</h3>
+        <p class="admin-intro">Gérez les demandes et les règles de réservation, une rubrique à la fois.</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="adminLogout()">${ic('logout',15)} Déconnexion</button>
     </div>
+    <nav class="admin-nav">
+      ${navBtn('rdv', 'users', 'Rendez-vous')}
+      ${navBtn('reglages', 'settings', 'Réglages généraux')}
+      ${navBtn('exceptions', 'calendar', 'Congés & exceptions')}
+    </nav>
+    ${body}
   </div>`;
 }
 
 /* ===================== Petits helpers d'inputs ===================== */
+function setAdminSection(s) {
+  state.adminSection = s;
+  try { localStorage.setItem('rdv_admin_section', s); } catch (e) {}
+  render();
+}
+// Refuse une période dont la fin est avant le début (ex: 02/08 → 31/07)
+function periodIsValid(debut, fin) {
+  if (debut && fin && fin < debut) {
+    showToast('error', 'La date de fin doit être le même jour ou après la date de début.');
+    return false;
+  }
+  return true;
+}
 function submitBlockedDate() {
+  if (!periodIsValid(document.getElementById('b-debut').value, document.getElementById('b-fin').value)) return;
   state.newBlock.date_debut = document.getElementById('b-debut').value;
   state.newBlock.date_fin = document.getElementById('b-fin').value;
   state.newBlock.motif = document.getElementById('b-motif').value;
   addOrUpdateBlockedDate();
 }
 function submitOverride() {
+  if (!periodIsValid(document.getElementById('o-debut').value, document.getElementById('o-fin').value)) return;
   state.newOverride.date_debut = document.getElementById('o-debut').value;
   state.newOverride.date_fin = document.getElementById('o-fin').value;
   state.newOverride.max_par_jour = document.getElementById('o-max').value;
@@ -1320,7 +1396,7 @@ function escHandler(e) {
 /* ===================== Init ===================== */
 render();
 loadMonth();
-if (state.adminToken) loadAdminData();
+if (state.view === 'admin' && state.adminToken) loadAdminData();
 </script>
 </body>
 </html>
