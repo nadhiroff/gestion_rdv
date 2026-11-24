@@ -6,42 +6,17 @@ services:
       - "4000"
     environment:
       PORT: "4000"
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-*}
-      DB_HOST: db
-      DB_PORT: "3306"
-      DB_USER: ${DB_USER:-rdv_user}
+      FRONTEND_ORIGIN: "*"
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME:-rdv_app}
+      DB_NAME: ${DB_NAME}
       ADMIN_CODE: ${ADMIN_CODE}
       JWT_SECRET: ${JWT_SECRET}
       SMTP_HOST: ${SMTP_HOST}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_PORT: "587"
+      SMTP_SECURE: "false"
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
-    depends_on:
-      db:
-        condition: service_healthy
-
-  db:
-    image: mysql:8.4
-    restart: unless-stopped
-    environment:
-      MYSQL_DATABASE: ${DB_NAME:-rdv_app}
-      MYSQL_USER: ${DB_USER:-rdv_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-      # Schéma exécuté automatiquement au premier démarrage du conteneur
-      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$${MYSQL_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 30s
-
-volumes:
-  db_data:
