@@ -25,6 +25,10 @@ function cleanEnv(name, { stripSpaces = false } = {}) {
 }
 
 const app = express();
+// Derrière un proxy HTTPS (Coolify, Nginx, Apache...) : fait confiance à
+// X-Forwarded-Proto pour que req.protocol soit https et que le contrôle
+// same-origin CORS fonctionne sans rien configurer.
+app.set('trust proxy', 1);
 app.use(express.json());
 
 // Empêche qu'une erreur dans une route async ne fasse planter tout le serveur :

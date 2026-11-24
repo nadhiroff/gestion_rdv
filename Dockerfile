@@ -1,10 +1,14 @@
-FROM node:20-alpine
-WORKDIR /app
-COPY backend/package*.json ./backend/
-RUN cd backend && npm ci --omit=dev
-COPY backend ./backend
-COPY frontend ./frontend
+# Image unique : API Node + frontend statique (server.js sert frontend/ lui-même)
+FROM node:22-alpine
+
 WORKDIR /app/backend
+COPY backend/package.json backend/package-lock.json ./
+RUN npm ci --omit=dev
+COPY backend/server.js ./
+
+WORKDIR /app
+COPY frontend ./frontend
+
 ENV NODE_ENV=production
-EXPOSE 3000
-CMD ["node", "server.js"]
+EXPOSE 4000
+CMD ["node", "backend/server.js"]
