@@ -769,6 +769,21 @@ app.delete('/api/admin/date-overrides/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Envoie un email de test au responsable (bouton "Tester l'envoi d'email" dans Réglages).
+// Répond toujours 200 avec { ok, error } pour afficher l'erreur SMTP exacte dans l'admin.
+app.post('/api/admin/test-email', asyncHandler(async (req, res) => {
+  const s = await getSettings();
+  const to = s && s.responsable_email;
+  if (!to) return res.json({ ok: false, error: "Aucun email de responsable enregistré : renseignez-le puis cliquez sur Enregistrer." });
+  const r = await sendMail(
+    to,
+    "Test d'envoi — Prise de rendez-vous",
+    htmlTemplate("Test d'envoi", '<h2>Test réussi ✅</h2><p>Si vous lisez ce message, les notifications de prise de rendez-vous fonctionnent correctement.</p>'),
+    'Test réussi : les notifications de prise de rendez-vous fonctionnent correctement.'
+  );
+  res.json({ ...r, to });
+}));
+
 // Sert le frontend (frontend/index.html) à la racine, pour pouvoir ouvrir
 // directement http://localhost:4000 sans Apache en local.
 const FRONTEND_DIR = require('path').join(__dirname, '..', 'frontend');

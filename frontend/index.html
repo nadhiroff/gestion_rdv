@@ -97,6 +97,15 @@
     display: flex; flex-direction: column; justify-content: space-between;
     border: 1.5px solid var(--line); background: var(--surface-tint);
     font-family: 'Space Grotesk', sans-serif; transition: transform .12s, box-shadow .12s, border-color .12s;
+    min-width: 0; overflow: hidden; container-type: inline-size;
+  }
+  .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .badge .b-short { display: none; width: 100%; height: 4px; border-radius: 2px; background: currentColor; }
+  /* Case trop étroite (mobile, calendrier à côté d'un panneau) : barre de couleur au lieu du mot */
+  @container (max-width: 62px) {
+    .badge .b-long { display: none; }
+    .badge .b-short { display: block; }
+    .badge.full, .badge.off { width: 100%; }
   }
   .cal-cell.empty { visibility: hidden; }
   .cal-cell .num { font-size: 0.92rem; font-weight: 700; }
@@ -260,8 +269,47 @@
   .guide ol { list-style: none; margin: 0; padding: 0; counter-reset: step; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
   .guide li { counter-increment: step; display: flex; gap: 10px; font-size: 0.84rem; line-height: 1.5; color: var(--ink); }
   .guide li::before { content: counter(step); flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 0.75rem; font-weight: 700; display: grid; place-items: center; }
-  .admin-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+  /* Panneaux côte à côte : même hauteur, boutons alignés en bas */
+  .admin-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
+  .admin-cols > .panel { margin-bottom: 0; display: flex; flex-direction: column; }
+  .admin-cols.cal-layout { grid-template-columns: minmax(0, 1.7fr) minmax(300px, 1fr); margin-bottom: 18px; }
+  @media (max-width: 1100px) { .admin-cols.cal-layout { grid-template-columns: 1fr; } }
   @media (max-width: 860px) { .admin-cols { grid-template-columns: 1fr; } }
+  .panel-foot { margin-top: auto; padding-top: 16px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .hint { display: flex; gap: 7px; align-items: flex-start; color: var(--ink-soft); font-size: 0.8rem; line-height: 1.5; margin: 2px 0 0; }
+  .hint .ic { flex: none; margin-top: 2px; }
+  .hint a { color: var(--accent); font-weight: 600; }
+  .nav-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--danger); color: #fff; font-size: 0.72rem; font-weight: 700; display: inline-grid; place-items: center; }
+  .recap { margin-top: 16px; padding: 14px 16px; background: var(--surface-tint); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  .recap-title { font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
+  .recap-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.85rem; border-top: 1px dashed var(--line); }
+  .recap-title + .recap-row, .recap > .recap-row:first-child { border-top: none; }
+  .recap-row > span { color: var(--ink-soft); }
+  .recap-row > b { text-align: right; font-weight: 600; overflow-wrap: anywhere; }
+  .recap-row em { font-style: normal; color: var(--accent); font-weight: 500; font-size: 0.78rem; }
+  .quick-dates { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 7px 12px; border: 1.5px solid var(--line); border-radius: 999px; background: #fff; font-size: 0.8rem; font-weight: 600; color: var(--ink); cursor: pointer; transition: border-color .15s, background .15s; }
+  .chip:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+  .day-status { align-self: flex-start; padding: 5px 12px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; }
+  .day-status.open { background: var(--success-soft); color: var(--success); }
+  .day-status.full { background: var(--danger-soft); color: var(--danger); }
+  .day-status.closed, .day-status.passee { background: var(--closed-soft); color: #6B7385; }
+  .exc-list { display: grid; gap: 8px; }
+  .exc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+  .recap .exc-row { margin-top: 8px; }
+  .exc-row.past { opacity: .6; }
+  .exc-main { flex: 1 1 180px; min-width: 0; }
+  .exc-dates { font-weight: 700; font-size: 0.86rem; }
+  .exc-detail { color: var(--ink-soft); font-size: 0.8rem; margin-top: 2px; overflow-wrap: anywhere; }
+  .exc-type { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border-radius: 6px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+  .exc-type.block { background: var(--closed-soft); color: #5B6476; }
+  .exc-type.override { background: var(--accent-soft); color: var(--accent); }
+  .exc-status { padding: 3px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+  .exc-status.encours { background: var(--success-soft); color: var(--success); }
+  .exc-status.avenir { background: var(--warning-soft); color: var(--warning); }
+  .exc-status.passee { background: var(--closed-soft); color: #6B7385; }
+  .exc-warn { color: var(--danger); font-size: 0.74rem; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
   @media (max-width: 1400px) { .admin-grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 700px) { .admin-grid { grid-template-columns: 1fr; } }
 
@@ -344,7 +392,13 @@
   @media (max-width: 600px) {
     .panel { padding: 16px; }
     table.ledger td, table.ledger th { padding: 8px 9px; }
-    .cal-cell { min-height: 52px; }
+    .cal-cell { min-height: 52px; padding: 6px 5px; border-radius: 9px; }
+    .cal-grid { gap: 4px; }
+    .cal-card { padding: 14px; }
+    .admin-nav button { flex-basis: 100%; justify-content: flex-start; }
+    .recap { padding: 12px; }
+    .recap-row { flex-direction: column; gap: 2px; }
+    .recap-row > b { text-align: left; }
   }
 </style>
 </head>
@@ -423,6 +477,8 @@ const state = {
   bookings: [],
   filters: { date: '', from: '', to: '', status: '' },
   newBlock: { id: null, date_debut: '', date_fin: '', motif: '' },
+  showPastExceptions: false,
+  testEmail: { loading: false, result: null },
   newOverride: { id: null, date_debut: '', date_fin: '', max_par_jour: '', responsable_nom: '', responsable_email: '', motif: '' },
   toast: null,
   confirmDialog: null,
@@ -789,6 +845,11 @@ async function saveSettings() {
 function toggleClosedWeekday(idx) {
   const arr = (state.adminSettings.jours_fermes || '').split(',').filter(Boolean).map(Number);
   const has = arr.includes(idx);
+  // garde ce qui a été tapé (nom, email, max) avant de redessiner la page
+  const v = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (v('s-nom') !== null) state.adminSettings.responsable_nom = v('s-nom');
+  if (v('s-email') !== null) state.adminSettings.responsable_email = v('s-email');
+  if (v('s-max') !== null) state.adminSettings.max_par_jour = Number(v('s-max')) || 1;
   state.adminSettings.jours_fermes = (has ? arr.filter(i => i !== idx) : [...arr, idx]).join(',');
   render();
 }
@@ -1004,10 +1065,13 @@ function renderCalendar(data, mode) {
             : `onclick="selectAdminDate('${c.date}')"`;
           let badge = '';
           if (c.status === 'disponible') badge = `<span class="badge ok">${c.restant}/${c.max}</span>`;
-          if (c.status === 'complet') badge = `<span class="badge full">Complet</span>`;
-          if (c.status === 'ferme') badge = `<span class="badge off">Fermé</span>`;
+          // Mot complet si la case est assez large, sinon petite barre de couleur (voir CSS @container)
+          if (c.status === 'complet') badge = `<span class="badge full"><span class="b-long">Complet</span><span class="b-short"></span></span>`;
+          if (c.status === 'ferme') badge = `<span class="badge off"><span class="b-long">Fermé</span><span class="b-short"></span></span>`;
           if (c.status === 'passe') badge = `<span class="badge off">—</span>`;
-          const title = c.status === 'complet' ? `title="Complet : les ${c.max} rendez-vous du jour sont déjà pris"` : (c.surcharge ? `title="Règle spéciale sur cette date (max et/ou responsable différents)"` : '');
+          const title = c.status === 'complet' ? `title="Complet : les ${c.max} rendez-vous du jour sont déjà pris"`
+            : c.status === 'ferme' ? `title="Fermé : pas de réservation ce jour-là"`
+            : (c.surcharge ? `title="Règle spéciale sur cette date (max et/ou responsable différents)"` : '');
           return `<div class="cal-cell ${c.status} ${clickClass} ${sel} ${isToday ? 'today' : ''}" ${onclickAttr} ${title}>
             ${c.surcharge ? '<span class="override-badge"></span>' : ''}
             <span class="num">${Number(c.date.slice(-2))}</span>${badge}
@@ -1165,21 +1229,67 @@ function renderAdmin() {
 
   if (!state.adminSettings) return '<div class="page"><div class="panel">Chargement…</div></div>';
   const s = state.adminSettings;
-  const joursFermesArr = (s.jours_fermes || '').split(',').filter(Boolean).map(Number);
+  const joursFermesArr = closedWeekdays();
+  const section = state.adminSection;
   const filterLabel = state.filters.date ? fmtDateShort(state.filters.date)
     : (state.filters.from || state.filters.to) ? `${state.filters.from ? fmtDateShort(state.filters.from) : '…'} → ${state.filters.to ? fmtDateShort(state.filters.to) : '…'}`
     : 'Toutes les dates';
 
-  const section = state.adminSection;
-  const navBtn = (id, icon, label) => `<button class="${section === id ? 'active' : ''}" onclick="setAdminSection('${id}')">${ic(icon, 16)} ${label}</button>`;
+  const navBtn = (id, icon, label, count) => `<button class="${section === id ? 'active' : ''}" onclick="setAdminSection('${id}')">${ic(icon, 16)} ${label}${count ? `<span class="nav-count">${count}</span>` : ''}</button>`;
   const guide = (title, steps) => `
     <div class="guide">
       <h4>${ic('info', 16)} ${title}</h4>
       <ol>${steps.map(st => `<li><span>${st}</span></li>`).join('')}</ol>
     </div>`;
+  const activeExceptions = state.blockedDates.concat(state.dateOverrides).filter(x => periodStatus(x.date_debut, x.date_fin) !== 'passee').length;
 
+  /* ---------- Rubrique : Rendez-vous ---------- */
+  const panelBookings = `
+      <div class="panel">
+        <h3>${ic('users', 18)} Rendez-vous</h3>
+        <div class="sub">Cliquez sur un jour du calendrier pour filtrer — recliquez dessus pour tout réafficher</div>
+        <div class="filters-bar">
+          <div class="sel-date">${ic('calendar',16)} Date sélectionnée : <span class="val">${filterLabel}</span></div>
+          <select onchange="changeStatusFilter(this.value)" style="margin-left:auto">
+            <option value="" ${!state.filters.status ? 'selected' : ''}>Tous les statuts</option>
+            <option value="pending" ${state.filters.status === 'pending' ? 'selected' : ''}>En attente</option>
+            <option value="accepted" ${state.filters.status === 'accepted' ? 'selected' : ''}>Acceptés</option>
+            <option value="rejected" ${state.filters.status === 'rejected' ? 'selected' : ''}>Refusés</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="clearFilters()">${ic('list',15)} Voir tout</button>
+        </div>
+        <div id="slot-form-container"></div>
+        ${state.bookings.length === 0 ? `<div class="empty-state">${ic('users',26)}<span>Aucun rendez-vous pour ces critères.</span></div>` : `
+        <div class="table-wrap">
+          <table class="ledger">
+            <thead><tr><th>Date</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th></th></tr></thead>
+            <tbody>
+              ${state.bookings.map(b => `
+                <tr>
+                  <td>${fmtDateShort(b.date)}</td>
+                  <td>${b.prenom} ${b.nom}</td>
+                  <td>${b.tel}</td>
+                  <td>${b.email}</td>
+                  <td><span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span></td>
+                  <td>
+                    <div class="row-actions">
+                      ${b.status === 'pending' ? `
+                        <button class="btn btn-accept btn-sm" onclick="setBookingStatus(${b.id}, 'accepted')">${ic('check',14)} Accepter</button>
+                        <button class="btn btn-danger btn-sm" onclick="setBookingStatus(${b.id}, 'rejected')">${ic('close',14)} Refuser</button>
+                      ` : ''}
+                      <button class="icon-btn del" title="Supprimer" onclick="deleteBooking(${b.id})">${ic('trash',16)}</button>
+                    </div>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`}
+      </div>`;
+
+  /* ---------- Rubrique : Réglages généraux ---------- */
+  const openDays = JOURS_LONG.filter((_, i) => !joursFermesArr.includes(i));
   const panelResponsable = `
-      <div class="panel" style="margin-bottom:0">
+      <div class="panel">
         <h3>${ic('user', 18)} Responsable &amp; capacité</h3>
         <div class="sub">Qui reçoit les notifications, et combien de rendez-vous par jour</div>
         <div class="field"><label>Nom du responsable</label><input id="s-nom" value="${s.responsable_nom || ''}" placeholder="Ex: M. Traoré" /></div>
@@ -1188,118 +1298,83 @@ function renderAdmin() {
           <label>Rendez-vous max / jour (valeur par défaut)</label>
           <input id="s-max" type="number" min="1" value="${s.max_par_jour}" />
         </div>
-        <p class="sub" style="margin:0 0 14px;font-size:0.78rem">Cette valeur s'applique à tous les jours ouverts. Pour donner un nombre différent (ou un autre responsable) à une date ou une période précise, utilisez le panneau "Règles spéciales par date" ci-dessous — pas besoin de la changer ici pour ça.</p>
-        <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
+        <p class="hint">${ic('info',14)}<span>Besoin d'un autre maximum ou d'un autre responsable seulement certains jours ? Utilisez plutôt une <a href="#" onclick="setAdminSection('exceptions');return false">règle spéciale</a>.</span></p>
+        <div class="panel-foot">
+          <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
+        </div>
       </div>`;
+
   const panelJours = `
-      <div class="panel" style="margin-bottom:0">
+      <div class="panel">
         <h3>${ic('ban', 18)} Jours fermés (récurrents)</h3>
-        <div class="sub">Jours de la semaine jamais ouverts à la réservation</div>
+        <div class="sub">Cliquez sur un jour pour le fermer (gris) ou le rouvrir, puis enregistrez</div>
         <div class="weekday-toggles">
           ${JOURS_LONG.map((j, idx) => `<button class="wd-chip ${joursFermesArr.includes(idx) ? 'off' : ''}" onclick="toggleClosedWeekday(${idx})">${j}</button>`).join('')}
         </div>
-        <p class="sub" style="margin:14px 0 4px">Cliquez sur un jour pour le fermer (gris) ou le rouvrir, puis enregistrez.</p>
-        <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
+        <div class="recap">
+          <div class="recap-title">Récapitulatif actuel</div>
+          <div class="recap-row"><span>Jours ouverts</span><b>${openDays.length ? openDays.join(', ') : 'Aucun'}</b></div>
+          <div class="recap-row"><span>Capacité par semaine</span><b>${openDays.length * (Number(s.max_par_jour) || 0)} rendez-vous</b></div>
+          <div class="recap-row"><span>Notifications envoyées à</span><b>${s.responsable_email || '<span style="color:var(--danger)">aucun email !</span>'}</b></div>
+        </div>
+        <div class="recap">
+          <div class="recap-title">Vérifier les emails</div>
+          <p class="hint" style="margin:0 0 10px">Envoie un email de test au responsable pour s'assurer que les notifications partent bien.</p>
+          <button class="btn btn-secondary btn-sm" onclick="sendTestEmail()" ${state.testEmail.loading ? 'disabled' : ''}>
+            ${state.testEmail.loading ? '<span class="spinner"></span> Envoi…' : ic('mail',15) + " Tester l'envoi d'email"}
+          </button>
+          ${state.testEmail.result ? `<div class="msg ${state.testEmail.result.ok ? 'ok' : 'error'}">${ic(state.testEmail.result.ok ? 'checkCircle' : 'ban',15)} ${state.testEmail.result.ok ? 'Email envoyé à ' + state.testEmail.result.to + ' — vérifiez la boîte de réception.' : state.testEmail.result.error}</div>` : ''}
+        </div>
+        <div class="panel-foot">
+          <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
+        </div>
       </div>`;
+
+  /* ---------- Rubrique : Congés & exceptions ---------- */
   const panelBlock = `
-      <div class="panel" style="margin-bottom:0" id="block-form-anchor">
+      <div class="panel" id="block-form-anchor">
         <h3>${ic('calendar', 18)} ${state.newBlock.id ? 'Modifier la période bloquée' : 'Bloquer une période'}</h3>
-        <div class="sub">Congés, indisponibilité, jour férié… laissez "fin" vide pour un seul jour</div>
+        <div class="sub">Personne ne pourra réserver ces jours-là. Laissez « fin » vide pour un seul jour.</div>
+        <div class="field">
+          <label>Raccourcis</label>
+          <div class="quick-dates">
+            <button class="chip" onclick="quickBlock('today')">Aujourd'hui</button>
+            <button class="chip" onclick="quickBlock('tomorrow')">Demain</button>
+            <button class="chip" onclick="quickBlock('week')">Reste de la semaine</button>
+            <button class="chip" onclick="quickBlock('nextweek')">Semaine prochaine</button>
+          </div>
+        </div>
         <div class="row2">
           <div class="field"><label>Date de début</label><input id="b-debut" type="date" value="${state.newBlock.date_debut}" /></div>
           <div class="field"><label>Date de fin (optionnel)</label><input id="b-fin" type="date" value="${state.newBlock.date_fin}" /></div>
         </div>
-        <div class="field"><label>Motif (optionnel)</label><input id="b-motif" value="${state.newBlock.motif}" placeholder="Congés, formation..." /></div>
-        <div style="display:flex;gap:8px">
+        <div class="field"><label>Motif (optionnel)</label><input id="b-motif" value="${state.newBlock.motif}" placeholder="Congés, formation, jour férié..." /></div>
+        <p class="hint">${ic('info',14)} Le motif est visible uniquement par vous, dans la liste ci-dessous et dans le détail du jour.</p>
+        <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="submitBlockedDate()">${state.newBlock.id ? ic('check',15) + ' Mettre à jour' : ic('plus',15) + ' Bloquer'}</button>
           ${state.newBlock.id ? `<button class="btn btn-ghost btn-sm" onclick="cancelEditBlock()">Annuler</button>` : ''}
         </div>
-        <div class="block-list">
-          ${state.blockedDates.length === 0 ? `<div class="empty-state" style="padding:16px">${ic('calendar',22)}<span>Aucune période bloquée pour le moment.</span></div>` : state.blockedDates.map(b => `
-            <div class="block-row ${state.newBlock.id === b.id ? 'editing' : ''}">
-              <div class="block-dates">${ic('calendar',14)} ${fmtDateShort(b.date_debut)}${b.date_fin !== b.date_debut ? ' → ' + fmtDateShort(b.date_fin) : ''}</div>
-              <div class="block-motif">${b.motif || '—'}</div>
-              <div class="block-actions">
-                <button class="icon-btn edit" title="Modifier" onclick='editBlockedDate(${JSON.stringify(b).replace(/'/g, "&apos;")})'>${ic('edit',16)}</button>
-                <button class="icon-btn del" title="Débloquer" onclick="removeBlockedDate(${b.id})">${ic('trash',16)}</button>
-              </div>
-            </div>`).join('')}
-        </div>
       </div>`;
+
   const panelOverride = `
-      <div class="panel" style="margin-bottom:0" id="override-form-anchor">
+      <div class="panel" id="override-form-anchor">
         <h3>${ic('users', 18)} ${state.newOverride.id ? 'Modifier la règle spéciale' : 'Règle spéciale par date'}</h3>
-        <div class="sub">Sur une journée ou une période précise, choisissez un autre nombre max de rendez-vous et/ou un autre responsable — sinon le réglage global s'applique partout.</div>
+        <div class="sub">Les jours restent ouverts, avec un autre maximum et/ou un autre responsable</div>
         <div class="row2">
           <div class="field"><label>Date de début</label><input id="o-debut" type="date" value="${state.newOverride.date_debut}" /></div>
           <div class="field"><label>Date de fin (optionnel)</label><input id="o-fin" type="date" value="${state.newOverride.date_fin}" /></div>
         </div>
-        <div class="field"><label>Max rendez-vous / jour (laisser vide = valeur globale)</label><input id="o-max" type="number" min="0" value="${state.newOverride.max_par_jour}" placeholder="Ex: 5" /></div>
+        <div class="field"><label>Max rendez-vous / jour (vide = ${s.max_par_jour}, la valeur générale)</label><input id="o-max" type="number" min="0" value="${state.newOverride.max_par_jour}" placeholder="Ex: 5" /></div>
         <div class="row2">
-          <div class="field"><label>Responsable dédié (nom, optionnel)</label><input id="o-nom" value="${state.newOverride.responsable_nom}" placeholder="Ex: Mme Koné" /></div>
-          <div class="field"><label>Email du responsable dédié (optionnel)</label><input id="o-email" type="email" value="${state.newOverride.responsable_email}" placeholder="autre-responsable@entreprise.fr" /></div>
+          <div class="field"><label>Responsable dédié (optionnel)</label><input id="o-nom" value="${state.newOverride.responsable_nom}" placeholder="Ex: Mme Koné" /></div>
+          <div class="field"><label>Son email (optionnel)</label><input id="o-email" type="email" value="${state.newOverride.responsable_email}" placeholder="autre@entreprise.fr" /></div>
         </div>
         <div class="field"><label>Motif (optionnel)</label><input id="o-motif" value="${state.newOverride.motif}" placeholder="Ex: forte affluence, remplaçant..." /></div>
-        <div style="display:flex;gap:8px">
+        <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="submitOverride()">${state.newOverride.id ? ic('check',15) + ' Mettre à jour' : ic('plus',15) + ' Ajouter la règle'}</button>
           ${state.newOverride.id ? `<button class="btn btn-ghost btn-sm" onclick="cancelEditOverride()">Annuler</button>` : ''}
         </div>
-        <div class="block-list">
-          ${state.dateOverrides.length === 0 ? `<div class="empty-state" style="padding:16px">${ic('users',22)}<span>Aucune règle spéciale pour le moment — le réglage global s'applique à tous les jours.</span></div>` : state.dateOverrides.map(o => `
-            <div class="block-row ${state.newOverride.id === o.id ? 'editing' : ''}">
-              <div class="block-dates">${ic('calendar',14)} ${fmtDateShort(o.date_debut)}${o.date_fin !== o.date_debut ? ' → ' + fmtDateShort(o.date_fin) : ''}</div>
-              <div class="block-motif">${o.max_par_jour != null ? `max ${o.max_par_jour}/j` : ''}${o.max_par_jour != null && (o.responsable_email || o.responsable_nom) ? ' · ' : ''}${o.responsable_nom || o.responsable_email ? `resp. ${o.responsable_nom || o.responsable_email}` : ''}${!o.max_par_jour && !o.responsable_nom && !o.responsable_email ? (o.motif || '—') : ''}</div>
-              <div class="block-actions">
-                <button class="icon-btn edit" title="Modifier" onclick='editOverride(${JSON.stringify(o).replace(/'/g, "&apos;")})'>${ic('edit',16)}</button>
-                <button class="icon-btn del" title="Supprimer" onclick="removeOverride(${o.id})">${ic('trash',16)}</button>
-              </div>
-            </div>`).join('')}
-        </div>
       </div>`;
-  const panelBookings = `
-    <div class="panel">
-      <h3>${ic('users', 18)} Rendez-vous</h3>
-      <div class="sub">Cliquez sur un jour du calendrier pour filtrer — recliquez dessus pour tout réafficher</div>
-
-      <div class="filters-bar">
-        <div class="sel-date">${ic('calendar',16)} Date sélectionnée : <span class="val">${filterLabel}</span></div>
-        <select onchange="changeStatusFilter(this.value)" style="margin-left:auto">
-          <option value="" ${!state.filters.status ? 'selected' : ''}>Tous les statuts</option>
-          <option value="pending" ${state.filters.status === 'pending' ? 'selected' : ''}>En attente</option>
-          <option value="accepted" ${state.filters.status === 'accepted' ? 'selected' : ''}>Acceptés</option>
-          <option value="rejected" ${state.filters.status === 'rejected' ? 'selected' : ''}>Refusés</option>
-        </select>
-        <button class="btn btn-secondary btn-sm" onclick="clearFilters()">${ic('list',15)} Voir tout</button>
-      </div>
-
-      <div id="slot-form-container"></div>
-
-      ${state.bookings.length === 0 ? `<div class="empty-state">${ic('users',26)}<span>Aucun rendez-vous pour ces critères.</span></div>` : `
-      <div class="table-wrap">
-        <table class="ledger">
-          <thead><tr><th>Date</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th></th></tr></thead>
-          <tbody>
-            ${state.bookings.map(b => `
-              <tr>
-                <td>${fmtDateShort(b.date)}</td>
-                <td>${b.prenom} ${b.nom}</td>
-                <td>${b.tel}</td>
-                <td>${b.email}</td>
-                <td><span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span></td>
-                <td>
-                  <div class="row-actions">
-                    ${b.status === 'pending' ? `
-                      <button class="btn btn-accept btn-sm" onclick="setBookingStatus(${b.id}, 'accepted')">${ic('check',14)} Accepter</button>
-                      <button class="btn btn-danger btn-sm" onclick="setBookingStatus(${b.id}, 'rejected')">${ic('close',14)} Refuser</button>
-                    ` : ''}
-                    <button class="icon-btn del" title="Supprimer" onclick="deleteBooking(${b.id})">${ic('trash',16)}</button>
-                  </div>
-                </td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`}
-    </div>`;
 
   let body;
   if (section === 'reglages') {
@@ -1310,16 +1385,16 @@ function renderAdmin() {
     ]) + `<div class="admin-cols">${panelResponsable}${panelJours}</div>`;
   } else if (section === 'exceptions') {
     body = guide('Congés & exceptions — pour des dates précises', [
-      "<b>Bloquer une période</b> : personne ne peut réserver ces jours-là (congés, jour férié…). Pour un seul jour, laissez la date de fin vide.",
+      "<b>Bloquer une période</b> : personne ne peut réserver ces jours-là (congés, jour férié…). Les raccourcis remplissent les dates pour vous.",
       "<b>Règle spéciale</b> : les jours restent ouverts, mais avec un autre nombre maximum et/ou un autre responsable qui reçoit les emails.",
-      "Ce que vous ajoutez apparaît sous chaque formulaire : le crayon pour modifier, la corbeille pour supprimer.",
-    ]) + `<div class="admin-cols">${panelBlock}${panelOverride}</div>`;
+      "Tout ce que vous ajoutez est listé dans <b>« Toutes les exceptions »</b> en bas, et visible en cliquant sur le jour dans l'onglet Rendez-vous.",
+    ]) + `<div class="admin-cols">${panelBlock}${panelOverride}</div>` + renderExceptionsList();
   } else {
     body = guide('Traiter les demandes de rendez-vous', [
       "Chaque nouvelle demande arrive avec le statut <b>En attente</b>, et le responsable reçoit un email.",
-      "Cliquez sur un jour du calendrier pour n'afficher que ses rendez-vous. <b>Recliquez dessus</b> pour revenir à la liste complète.",
+      "Cliquez sur un jour du calendrier : son <b>détail</b> (capacité, responsable, blocage, règle spéciale) s'affiche dans le panneau « Détail du jour ». <b>Recliquez</b> pour désélectionner.",
       "Cliquez sur <b>Accepter</b> ou <b>Refuser</b> : le client reçoit automatiquement un email avec la réponse.",
-    ]) + renderCalendar(state.monthData, 'admin') + panelBookings;
+    ]) + `<div class="admin-cols cal-layout">${renderCalendar(state.monthData, 'admin')}${state.filters.date ? renderDayDetails(state.filters.date) : renderUpcoming()}</div>` + panelBookings;
   }
 
   return `
@@ -1334,10 +1409,205 @@ function renderAdmin() {
     <nav class="admin-nav">
       ${navBtn('rdv', 'users', 'Rendez-vous')}
       ${navBtn('reglages', 'settings', 'Réglages généraux')}
-      ${navBtn('exceptions', 'calendar', 'Congés & exceptions')}
+      ${navBtn('exceptions', 'calendar', 'Congés & exceptions', activeExceptions)}
     </nav>
     ${body}
   </div>`;
+}
+
+/* ---- Admin : détail d'un jour, exceptions à venir, liste complète ---- */
+function closedWeekdays() {
+  return ((state.adminSettings && state.adminSettings.jours_fermes) || '').split(',').filter(Boolean).map(Number);
+}
+function weekdayOf(iso) { return (new Date(iso + 'T00:00:00').getDay() + 6) % 7; }
+function addDays(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function fmtPeriod(debut, fin) { return fmtDateShort(debut) + (fin && fin !== debut ? ' → ' + fmtDateShort(fin) : ''); }
+function periodStatus(debut, fin) {
+  const t = todayIso();
+  if ((fin || debut) < t) return 'passee';
+  if (debut <= t) return 'encours';
+  return 'avenir';
+}
+const PERIOD_LABEL = { passee: 'Passée', encours: 'En cours', avenir: 'À venir' };
+function overrideSummary(o) {
+  const parts = [];
+  if (o.max_par_jour != null) parts.push(`max ${o.max_par_jour} rdv/jour`);
+  if (o.responsable_nom || o.responsable_email) parts.push(`responsable : ${o.responsable_nom || ''}${o.responsable_email ? ` (${o.responsable_email})` : ''}`);
+  return parts.join(' · ') || 'aucun changement';
+}
+// Liste unique des congés + règles spéciales, triée : en cours, à venir, puis passées
+function allExceptions() {
+  const rank = { encours: 0, avenir: 1, passee: 2 };
+  return state.blockedDates.map(b => ({ kind: 'block', item: b }))
+    .concat(state.dateOverrides.map(o => ({ kind: 'override', item: o })))
+    .map(x => ({ ...x, st: periodStatus(x.item.date_debut, x.item.date_fin) }))
+    .sort((a, b) => rank[a.st] - rank[b.st] || (a.st === 'passee' ? b.item.date_debut.localeCompare(a.item.date_debut) : a.item.date_debut.localeCompare(b.item.date_debut)));
+}
+function exceptionRow(x, compact) {
+  const it = x.item;
+  const isBlock = x.kind === 'block';
+  const inverted = it.date_fin && it.date_fin < it.date_debut;
+  return `
+    <div class="exc-row ${x.st === 'passee' ? 'past' : ''}">
+      <span class="exc-type ${isBlock ? 'block' : 'override'}">${ic(isBlock ? 'ban' : 'users', 13)} ${isBlock ? 'Bloqué' : 'Règle spéciale'}</span>
+      <div class="exc-main">
+        <div class="exc-dates">${fmtPeriod(it.date_debut, it.date_fin)}${inverted ? ` <span class="exc-warn" title="La date de fin est avant la date de début : cette période ne s'applique à aucun jour">${ic('info',13)} dates inversées</span>` : ''}</div>
+        <div class="exc-detail">${isBlock ? (it.motif || 'Sans motif') : overrideSummary(it) + (it.motif ? ' — ' + it.motif : '')}</div>
+      </div>
+      ${compact ? '' : `<span class="exc-status ${x.st}">${PERIOD_LABEL[x.st]}</span>`}
+      <div class="block-actions">
+        <button class="icon-btn edit" title="Modifier" onclick="${isBlock ? 'openBlockEditor' : 'openOverrideEditor'}(${it.id})">${ic('edit',16)}</button>
+        <button class="icon-btn del" title="Supprimer" onclick="${isBlock ? 'removeBlockedDate' : 'removeOverride'}(${it.id})">${ic('trash',16)}</button>
+      </div>
+    </div>`;
+}
+function renderExceptionsList() {
+  const all = allExceptions();
+  const past = all.filter(x => x.st === 'passee');
+  const shown = state.showPastExceptions ? all : all.filter(x => x.st !== 'passee');
+  return `
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <div>
+          <h3>${ic('list', 18)} Toutes les exceptions</h3>
+          <div class="sub" style="margin-bottom:0">Congés et règles spéciales enregistrés, du plus proche au plus lointain</div>
+        </div>
+        ${past.length ? `<button class="btn btn-ghost btn-sm" onclick="togglePastExceptions()">${ic('eye',15)} ${state.showPastExceptions ? 'Masquer' : 'Afficher'} les passées (${past.length})</button>` : ''}
+      </div>
+      <div class="exc-list">
+        ${shown.length ? shown.map(x => exceptionRow(x)).join('') : `<div class="empty-state" style="padding:18px">${ic('calendar',22)}<span>Aucune exception ${past.length ? 'en cours ou à venir' : 'pour le moment'} — le réglage général s'applique à tous les jours.</span></div>`}
+      </div>
+    </div>`;
+}
+function renderUpcoming() {
+  const s = state.adminSettings;
+  const next = allExceptions().filter(x => x.st !== 'passee').slice(0, 5);
+  const closed = closedWeekdays().map(i => JOURS_LONG[i]);
+  return `
+    <div class="panel side-panel">
+      <h3>${ic('clock', 18)} En un coup d'œil</h3>
+      <div class="sub">Cliquez sur un jour du calendrier pour voir son détail complet</div>
+      <div class="recap" style="margin-top:0">
+        <div class="recap-title">Réglage général</div>
+        <div class="recap-row"><span>Maximum par jour</span><b>${s.max_par_jour} rendez-vous</b></div>
+        <div class="recap-row"><span>Fermé chaque</span><b>${closed.length ? closed.join(', ') : 'aucun jour'}</b></div>
+        <div class="recap-row"><span>Responsable</span><b>${s.responsable_nom || '—'}</b></div>
+      </div>
+      <div class="recap">
+        <div class="recap-title">Exceptions en cours et à venir</div>
+        ${next.length ? next.map(x => exceptionRow(x, true)).join('') : `<p class="hint" style="margin:0">Aucune — tous les jours suivent le réglage général.</p>`}
+      </div>
+      <div class="panel-foot">
+        <button class="btn btn-secondary btn-sm" onclick="setAdminSection('exceptions')">${ic('calendar',15)} Gérer les congés &amp; exceptions</button>
+      </div>
+    </div>`;
+}
+function renderDayDetails(iso) {
+  const s = state.adminSettings;
+  const today = todayIso();
+  const closed = closedWeekdays().includes(weekdayOf(iso));
+  const blocks = state.blockedDates.filter(b => iso >= b.date_debut && iso <= b.date_fin);
+  const overrides = state.dateOverrides.filter(o => iso >= o.date_debut && iso <= o.date_fin);
+  const cell = ((state.monthData && state.monthData.days) || []).find(d => d.date === iso);
+  const o = overrides[0];
+  const max = cell ? cell.max : (o && o.max_par_jour != null ? o.max_par_jour : s.max_par_jour);
+  const taken = cell ? cell.max - cell.restant : state.bookings.filter(b => b.date === iso && b.status !== 'rejected').length;
+  const respNom = o && (o.responsable_nom || o.responsable_email) ? o.responsable_nom : s.responsable_nom;
+  const respEmail = o && o.responsable_email ? o.responsable_email : s.responsable_email;
+
+  let status, cls;
+  if (iso < today) { status = 'Jour passé'; cls = 'passee'; }
+  else if (closed) { status = 'Fermé (chaque ' + JOURS_LONG[weekdayOf(iso)].toLowerCase() + ')'; cls = 'closed'; }
+  else if (blocks.length) { status = 'Bloqué'; cls = 'closed'; }
+  else if (cell && cell.status === 'complet') { status = 'Complet'; cls = 'full'; }
+  else { status = 'Ouvert à la réservation'; cls = 'open'; }
+
+  const exc = blocks.map(b => ({ kind: 'block', item: b })).concat(overrides.map(x => ({ kind: 'override', item: x })))
+    .map(x => ({ ...x, st: periodStatus(x.item.date_debut, x.item.date_fin) }));
+
+  return `
+    <div class="panel side-panel">
+      <h3>${ic('calendar', 18)} Détail du jour</h3>
+      <div class="sub" style="text-transform:capitalize">${fmtDateLong(iso)}</div>
+      <span class="day-status ${cls}">${status}</span>
+      <div class="recap">
+        <div class="recap-row"><span>Rendez-vous</span><b>${closed || blocks.length ? '—' : `${taken} / ${max}${o && o.max_par_jour != null ? ' <em>(règle spéciale)</em>' : ''}`}</b></div>
+        <div class="recap-row"><span>Responsable</span><b>${respNom || '—'}${o && (o.responsable_nom || o.responsable_email) ? ' <em>(règle spéciale)</em>' : ''}</b></div>
+        <div class="recap-row"><span>Emails envoyés à</span><b>${respEmail || '—'}</b></div>
+      </div>
+      <div class="recap">
+        <div class="recap-title">Exceptions sur ce jour</div>
+        ${exc.length ? exc.map(x => exceptionRow(x, true)).join('') : `<p class="hint" style="margin:0">Aucune — ce jour suit le réglage général.</p>`}
+      </div>
+      ${iso >= today ? `
+      <div class="panel-foot">
+        ${!blocks.length && !closed ? `<button class="btn btn-secondary btn-sm" onclick="prefillBlock('${iso}')">${ic('ban',15)} Bloquer ce jour</button>` : ''}
+        ${!overrides.length ? `<button class="btn btn-secondary btn-sm" onclick="prefillOverride('${iso}')">${ic('users',15)} Règle spéciale</button>` : ''}
+      </div>` : ''}
+    </div>`;
+}
+function goToExceptions(anchorId) {
+  state.adminSection = 'exceptions';
+  try { localStorage.setItem('rdv_admin_section', 'exceptions'); } catch (e) {}
+  render();
+  const el = document.getElementById(anchorId);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function openBlockEditor(id) {
+  const b = state.blockedDates.find(x => x.id === id);
+  if (!b) return;
+  state.newBlock = { id: b.id, date_debut: b.date_debut, date_fin: b.date_fin !== b.date_debut ? b.date_fin : '', motif: b.motif || '' };
+  goToExceptions('block-form-anchor');
+}
+function openOverrideEditor(id) {
+  const o = state.dateOverrides.find(x => x.id === id);
+  if (!o) return;
+  state.newOverride = {
+    id: o.id, date_debut: o.date_debut, date_fin: o.date_fin !== o.date_debut ? o.date_fin : '',
+    max_par_jour: o.max_par_jour == null ? '' : o.max_par_jour,
+    responsable_nom: o.responsable_nom || '', responsable_email: o.responsable_email || '', motif: o.motif || '',
+  };
+  goToExceptions('override-form-anchor');
+}
+function prefillBlock(iso) {
+  state.newBlock = { id: null, date_debut: iso, date_fin: '', motif: '' };
+  goToExceptions('block-form-anchor');
+}
+function prefillOverride(iso) {
+  state.newOverride = { id: null, date_debut: iso, date_fin: '', max_par_jour: '', responsable_nom: '', responsable_email: '', motif: '' };
+  goToExceptions('override-form-anchor');
+}
+function quickBlock(kind) {
+  const t = todayIso();
+  const wd = weekdayOf(t); // 0 = lundi
+  const ranges = {
+    today: [t, ''],
+    tomorrow: [addDays(t, 1), ''],
+    week: [t, addDays(t, 6 - wd)],
+    nextweek: [addDays(t, 7 - wd), addDays(t, 13 - wd)],
+  };
+  const [debut, fin] = ranges[kind];
+  state.newBlock = { ...state.newBlock, date_debut: debut, date_fin: fin, motif: document.getElementById('b-motif').value };
+  render();
+}
+function togglePastExceptions() {
+  state.showPastExceptions = !state.showPastExceptions;
+  render();
+}
+async function sendTestEmail() {
+  state.testEmail = { loading: true, result: null };
+  render();
+  try {
+    state.testEmail.result = await api('/admin/test-email', { method: 'POST', body: '{}' });
+  } catch (e) {
+    state.testEmail.result = { ok: false, error: e.message };
+  }
+  state.testEmail.loading = false;
+  render();
 }
 
 /* ===================== Petits helpers d'inputs ===================== */
