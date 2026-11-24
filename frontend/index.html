@@ -85,13 +85,6 @@
   .slot-left.low { background: var(--warning-soft); color: var(--warning); }
   .slot-go { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
   @media (max-width: 420px) { .slot-go { display: none; } }
-  .help-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
-  .help-link { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-tint); color: var(--ink); text-decoration: none; font-size: 0.8rem; transition: border-color .15s, background .15s; }
-  .help-link:hover { border-color: var(--accent); background: var(--accent-soft); }
-  .help-link .ic { color: var(--accent); flex: none; }
-  .help-link span { display: flex; flex-direction: column; color: var(--ink-soft); }
-  .help-link b { color: var(--ink); font-size: 0.88rem; }
-  .help-hours { display: flex; align-items: center; gap: 7px; margin-top: 12px; color: var(--ink-soft); font-size: 0.8rem; }
 
   /* ---------- Panels & cards ---------- */
   .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 22px; margin-bottom: 20px; box-shadow: var(--shadow-sm); animation: riseIn .35s ease; min-width: 0; box-sizing: border-box; }
@@ -1163,7 +1156,6 @@ function renderClient() {
       <div class="client-grid">
         <div>
           ${renderCalendar(state.monthData, 'client')}
-          <div class="info-hint">${ic('info', 17)}<span>Votre demande est examinée par le responsable avant d'être définitivement confirmée. Vous serez notifié par email dans tous les cas.</span></div>
         </div>
         <div>
           <div class="panel">
@@ -1185,15 +1177,7 @@ function renderClient() {
             </div>
           </div>
           ${renderNextSlots()}
-          <div class="panel">
-            <h3>${ic('phone', 18)} Besoin d'aide ?</h3>
-            <div class="sub">Une question avant de réserver ? Contactez-nous directement.</div>
-            <div class="help-links">
-              <a class="help-link" href="tel:+2290145789764">${ic('phone', 17)}<span><b>Appeler</b>+229 01 45 78 97 64</span></a>
-              <a class="help-link" href="https://wa.me/+2290145789764" target="_blank" rel="noopener">${ic('whatsapp', 17)}<span><b>WhatsApp</b>Réponse rapide</span></a>
-            </div>
-            <div class="help-hours">${ic('clock', 15)} Lun – Ven : 9h – 18h · Sam : 9h – 12h</div>
-          </div>
+          <div class="info-hint">${ic('info', 17)}<span>Votre demande est examinée par le responsable avant d'être définitivement confirmée. Vous serez notifié par email dans tous les cas.</span></div>
         </div>
       </div>
     </div>`;
