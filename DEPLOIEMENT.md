@@ -15,6 +15,19 @@ Dans Coolify : **+ New › Database › MySQL**. À la création, remplissez
 La base n'a pas besoin d'être exposée sur Internet : l'application la joint par le réseau
 interne de Coolify. Activez les **sauvegardes programmées** de cette base.
 
+Dans la fiche de la base, copiez **« MySQL URL (internal) »** et collez-la telle quelle dans la
+variable `DATABASE_URL` de l'application (§3). C'est la seule variable nécessaire pour la base :
+
+```
+DATABASE_URL=mysql://utilisateur:mot_de_passe@nom-du-conteneur:3306/nom_de_la_base
+```
+
+> Cette URL contient le mot de passe : elle se met **uniquement** dans Coolify, jamais dans un
+> fichier du dépôt.
+
+<details>
+<summary>Alternative : variables séparées (utilisées seulement si <code>DATABASE_URL</code> est vide)</summary>
+
 | Variable | Champ dans la fiche de la base Coolify |
 |---|---|
 | `DB_HOST` | nom du conteneur MySQL (dans l'URL interne, entre `@` et `:3306`) |
@@ -22,6 +35,8 @@ interne de Coolify. Activez les **sauvegardes programmées** de cette base.
 | `DB_PASSWORD` | Normal user password |
 | `DB_NAME` | Initial database |
 | `DB_PORT` | `3306` (ou laisser vide : la valeur par défaut est 3306) |
+
+</details>
 
 ## 2. L'application
 
@@ -41,7 +56,7 @@ fichier : `docker-compose.yml`).
 Onglet **Environment Variables**, mode **Bulk Editor**, collez le contenu de `.env.example`
 puis remplacez les valeurs :
 
-- `DB_*` : repris depuis la fiche de la base MySQL (§1) ;
+- `DATABASE_URL` : l’URL interne de la base MySQL (§1) ;
 - `ADMIN_CODE` : code d'accès à l'espace Administration ;
 - `JWT_SECRET` : générer une fois avec
   `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`, ne plus changer ;
@@ -79,7 +94,7 @@ Le schéma SQL est rejoué à chaque démarrage (`IF NOT EXISTS` : sans effet de
 
 | Symptôme | Cause probable |
 |---|---|
-| `Échec de l’initialisation de la base` | `DB_HOST`/`DB_USER`/`DB_PASSWORD`/`DB_NAME` incorrects → recopier depuis la fiche de la base Coolify |
+| `Échec de l’initialisation de la base` | `DATABASE_URL` incorrecte → recopier « MySQL URL (internal) » depuis la fiche de la base Coolify |
 | Site OK mais calendrier vide / erreur API | conteneur pas encore démarré ou base injoignable — vérifier les logs |
 | Emails non reçus | `SMTP_*` invalides → tester avec « Tester l'envoi d'email » dans l'admin |
 | Erreur CORS dans la console navigateur |rare : `FRONTEND_ORIGIN` — remettre `*` dans le compose |
