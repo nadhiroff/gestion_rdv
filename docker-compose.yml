@@ -4,6 +4,10 @@ services:
     restart: unless-stopped
     expose:
       - "4000"
+    # Réseau « coolify » : celui de la base MySQL gérée par Coolify.
+    # Sans lui, l'appli ne trouve pas l'hôte de DATABASE_URL (getaddrinfo EAI_AGAIN).
+    networks:
+      - coolify
     environment:
       # PORT (4000), FRONTEND_ORIGIN (*), SMTP_PORT (587), SMTP_SECURE (false) :
       # valeurs par défaut du serveur, rien à configurer.
@@ -15,3 +19,7 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
+
+networks:
+  coolify:
+    external: true
