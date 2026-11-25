@@ -417,6 +417,21 @@ app.post('/api/bookings', bookingLimiter, async (req, res) => {
             error: `Vous avez déjà une demande en cours pour le ${formatDate(active.date)}. Une seule demande à la fois : annulez-la avec le lien reçu par email, ou attendez qu'elle soit passée ou refusée.`,
           });
         }
+        // Règle 1 bis : déjà refusé (ou déjà accepté) pour CE jour -> pas de nouvelle demande ce jour-là
+        // (évite de harceler en redemandant, même sous un autre nom, le jour où l'on a été refusé)
+        const [memeJour] = await conn.query(
+          "SELECT status, email, tel FROM bookings WHERE date = ? AND status IN ('rejected','accepted')",
+          [date]
+        );
+        const dejaCeJour = memeJour.find((r) => samePerson(r, email, tel));
+        if (dejaCeJour) {
+          return res.status(409).json({
+            code: 'DEJA_TRAITE_CE_JOUR',
+            error: dejaCeJour.status === 'rejected'
+              ? `Votre demande pour le ${formatDate(date)} n'a pas été retenue : il n'est pas possible de redemander ce jour-là. Merci de choisir une autre date.`
+              : `Vous avez déjà un rendez-vous confirmé le ${formatDate(date)}.`,
+          });
+        }
         // Règle 2 : trop d'annulations récentes -> plus de réservation en ligne
         const [annuls] = await conn.query(
           "SELECT email, tel FROM bookings WHERE status = 'cancelled' AND cancelled_at >= NOW() - INTERVAL ? DAY",

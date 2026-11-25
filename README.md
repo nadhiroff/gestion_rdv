@@ -56,7 +56,15 @@ Pour éviter qu'une même personne bloque plusieurs places ou plusieurs jours :
   pour une date à venir) ;
 - une « même personne », c'est le **même email** ou le **même numéro de téléphone**, quelle que soit
   la façon de l'écrire (`+229 01 11 22 33 44`, `0111223344`… sont reconnus comme identiques) ;
-- elle pourra refaire une demande quand la précédente sera **passée**, **refusée** ou **annulée**.
+- elle pourra refaire une demande quand la précédente sera **passée**, **refusée** ou **annulée**,
+  mais **pas pour un jour où elle a déjà été refusée ou acceptée** (voir ci-dessous).
+
+**Pas de nouvelle demande pour un jour déjà traité.** Une personne dont la demande a été **refusée**
+pour un jour ne peut plus redemander **ce même jour**, même en changeant de nom (elle est reconnue
+par son email ou son téléphone). Idem si elle a déjà un rendez-vous **accepté** ce jour-là. Elle
+peut demander un **autre jour**. Si la direction change d'avis, le bouton **« Rétablir »** remet la
+demande refusée en attente. Une demande que le visiteur a lui-même **annulée** ne bloque pas le
+jour (la limite de 2 annulations en 30 jours s'applique).
 
 Le message affiché au visiteur lui indique la date de sa demande en cours.
 
