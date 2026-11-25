@@ -260,6 +260,15 @@ function cancelCheck(booking) {
 function publicBaseUrl(req) {
   return (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
 }
+// Lien direct vers la demande dans l'espace admin (emails du responsable) : /admin?rdv=<id>
+function adminBookingUrl(req, id) {
+  return `${publicBaseUrl(req)}/admin?rdv=${encodeURIComponent(id)}`;
+}
+function adminButtonHtml(url, label) {
+  return `
+        <p style="text-align:center;margin:24px 0 8px"><a class="btn" href="${url}" style="color:#ffffff;font-size:15px;padding:14px 28px">${label}</a></p>
+        <p style="text-align:center;font-size:12px;color:#888;margin:0">Le lien ouvre l'espace admin directement sur ce rendez-vous (code d'accès demandé si vous n'êtes pas connecté).</p>`;
+}
 function cancelBlockHtml(url) {
   return `
       <div class="info-box">
@@ -473,13 +482,13 @@ app.post('/api/bookings', bookingLimiter, async (req, res) => {
           <div class="info-row"><span class="info-label">Téléphone :</span><span class="info-value">${h.tel}</span></div>
           <div class="info-row"><span class="info-label">Email :</span><span class="info-value">${h.email}</span></div>
         </div>
-        <p>Connectez-vous à l'espace administrateur pour accepter ou refuser cette demande.</p>
+        ${adminButtonHtml(adminBookingUrl(req, result.insertId), '✅ Accepter ou refuser cette demande')}
       `);
       responsableMail = await sendMail(
         eff.responsable_email,
         `Nouvelle demande de rendez-vous - ${dateLabel}`,
         htmlContent,
-        `Une nouvelle demande a été enregistrée.\n\nDate : ${dateLabel}\nNom : ${nom} ${prenom}\nTéléphone : ${tel}\nEmail : ${email}\n\nConnectez-vous à l'espace administrateur pour l'accepter ou la refuser.`
+        `Une nouvelle demande a été enregistrée.\n\nDate : ${dateLabel}\nNom : ${nom} ${prenom}\nTéléphone : ${tel}\nEmail : ${email}\n\nAccepter ou refuser cette demande : ${adminBookingUrl(req, result.insertId)}`
       );
     } else {
       console.warn(`Aucun email responsable configuré pour le ${dateLabel} (ni surcharge ni réglage global) : notification non envoyée.`);
@@ -787,8 +796,9 @@ app.patch('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
           ${dureeLabel ? `<div class="info-row"><span class="info-label">Durée :</span><span class="info-value">${dureeLabel}</span></div>` : ''}
           ${responsableNom ? `<div class="info-row"><span class="info-label">Responsable :</span><span class="info-value">${escHtml(responsableNom)}</span></div>` : ''}
         </div>
+        ${adminButtonHtml(adminBookingUrl(req, booking.id), 'Voir ce rendez-vous dans l’espace admin')}
       `);
-      const adminText = `Nouveau rendez-vous accepté :\nClient: ${booking.prenom} ${booking.nom}\nTel: ${booking.tel}\nEmail: ${booking.email}\nDate: ${dateLabel}${heureLabel ? `\nHeure: ${heureLabel}` : ''}${dureeLabel ? `\nDurée: ${dureeLabel}` : ''}${responsableNom ? `\nResponsable: ${responsableNom}` : ''}`;
+      const adminText = `Nouveau rendez-vous accepté :\nClient: ${booking.prenom} ${booking.nom}\nTel: ${booking.tel}\nEmail: ${booking.email}\nDate: ${dateLabel}${heureLabel ? `\nHeure: ${heureLabel}` : ''}${dureeLabel ? `\nDurée: ${dureeLabel}` : ''}${responsableNom ? `\nResponsable: ${responsableNom}` : ''}\n\nVoir dans l'espace admin : ${adminBookingUrl(req, booking.id)}`;
       await sendMail(effJour.responsable_email, `Rendez-vous accepté - ${booking.prenom} ${booking.nom}`, adminHtml, adminText);
     }
   } else {
@@ -1083,8 +1093,9 @@ app.post('/api/public/cancel/:token', cancelLimiter, asyncHandler(async (req, re
           <div class="info-row"><span class="info-label">Téléphone :</span><span class="info-value">${hb.tel}</span></div>
           <div class="info-row"><span class="info-label">Email :</span><span class="info-value">${hb.email}</span></div>
           <div class="info-row"><span class="info-label">Date :</span><span class="info-value">${dateLabel}${heure ? ' à ' + heure : ''}</span></div>
-        </div>`),
-      `Rendez-vous annulé par le client (aucune action nécessaire, la place est libérée).\nClient : ${b.prenom} ${b.nom}\nTél : ${b.tel}\nEmail : ${b.email}\nDate : ${dateLabel}${heure ? ' à ' + heure : ''}`
+        </div>
+        ${adminButtonHtml(adminBookingUrl(req, b.id), 'Voir dans l’espace admin')}`),
+      `Rendez-vous annulé par le client (aucune action nécessaire, la place est libérée).\nClient : ${b.prenom} ${b.nom}\nTél : ${b.tel}\nEmail : ${b.email}\nDate : ${dateLabel}${heure ? ' à ' + heure : ''}\n\nVoir dans l'espace admin : ${adminBookingUrl(req, b.id)}`
     );
   }
   // Confirmation au client

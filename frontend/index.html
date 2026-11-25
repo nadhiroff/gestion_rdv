@@ -367,6 +367,7 @@
   table.ledger td { text-align: center; vertical-align: middle; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 0.85rem; white-space: nowrap; }
   table.ledger tbody tr { transition: background .12s; }
   table.ledger tbody tr:hover { background: var(--surface-tint); }
+  table.ledger tbody tr.row-focus { background: var(--warning-soft); box-shadow: inset 4px 0 0 var(--warning); }
   .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
   .status-pill.pending { background: var(--warning-soft); color: var(--warning); }
   .status-pill.accepted { background: var(--success-soft); color: var(--success); }
@@ -559,6 +560,9 @@ const state = {
   showPastExceptions: false,
   codeChanging: false,
   adminMenuOpen: false,
+  // Lien d'email « Accepter ou refuser cette demande » : /admin?rdv=<id>
+  focusBookingId: isAdminUrl() ? (Number(new URLSearchParams(location.search).get('rdv')) || null) : null,
+  highlightBookingId: null,
   stats: null, // bloc « Activité » + pastille des demandes en attente // menu ☰ de l'admin sur téléphone
   legalModal: null, // 'privacy' | 'terms'
   newOverride: { id: null, date_debut: '', date_fin: '', max_par_jour: '', responsable_nom: '', responsable_email: '', motif: '' },
@@ -770,7 +774,29 @@ async function loadAdminData() {
     state.dateOverrides = overrides;
     state.responsables = responsables;
     await loadBookings();
+    if (state.focusBookingId) await focusBooking(state.focusBookingId);
   } catch (e) { showToast('error', e.message); render(); }
+}
+// Lien reçu par email (/admin?rdv=<id>) : ouvrir directement la demande, filtrée sur son jour et en surbrillance
+async function focusBooking(id) {
+  state.focusBookingId = null;
+  history.replaceState(null, '', location.pathname + location.hash); // retire ?rdv= de l'adresse
+  try {
+    const all = await api('/admin/bookings');
+    const b = all.find(x => x.id === id);
+    if (!b) { showToast('error', 'Cette demande n’existe plus (elle a peut-être été supprimée).'); return; }
+    state.adminSection = 'rdv';
+    state.adminMenuOpen = false;
+    try { localStorage.setItem('rdv_admin_section', 'rdv'); } catch (e) {}
+    state.filters = { date: b.date, from: '', to: '', status: '' };
+    const [y, m] = b.date.split('-').map(Number);
+    if (state.cursor.year !== y || state.cursor.month !== m - 1) { state.cursor = { year: y, month: m - 1 }; loadMonth(); }
+    state.highlightBookingId = id;
+    await loadBookings();
+    const row = document.getElementById(`bk-${id}`);
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => { state.highlightBookingId = null; document.getElementById(`bk-${id}`)?.classList.remove('row-focus'); }, 8000);
+  } catch (e) { showToast('error', e.message); }
 }
 async function loadBookings() {
   const { date, from, to, status } = state.filters;
@@ -1465,7 +1491,7 @@ function renderAdmin() {
             <thead><tr><th>Date</th><th>Créneau</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
               ${state.bookings.map(b => `
-                <tr>
+                <tr id="bk-${b.id}" class="${state.highlightBookingId === b.id ? 'row-focus' : ''}">
                   <td>${fmtDateShort(b.date)}</td>
                   <td>${slotLabel(b)}</td>
                   <td>${esc(b.prenom)} ${esc(b.nom)}</td>

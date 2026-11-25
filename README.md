@@ -106,10 +106,15 @@ Sur téléphone, les rubriques de l'admin sont regroupées dans un **menu ☰**.
 
 | Événement | Le visiteur reçoit | Le responsable reçoit |
 |---|---|---|
-| Nouvelle demande | Accusé de réception + lien d'annulation | « Nouvelle demande » avec les coordonnées du visiteur |
+| Nouvelle demande | Accusé de réception + lien d'annulation | « Nouvelle demande » avec les coordonnées du visiteur et un bouton **« Accepter ou refuser cette demande »** |
 | Demande acceptée | Confirmation : date, heure, durée, responsable + lien d'annulation | Récapitulatif du rendez-vous accepté |
 | Demande refusée | Email de refus, avec invitation à choisir une autre date | — |
 | Annulation par le visiteur | Confirmation de l'annulation | Information « aucune action nécessaire » |
+
+Chaque email reçu par le responsable contient un **lien direct** vers la demande dans l'espace
+admin : un clic ouvre la rubrique *Rendez-vous* filtrée sur le bon jour, la demande **surlignée**
+avec ses boutons Accepter / Refuser. Si le responsable n'est pas connecté, il tape d'abord son code
+puis arrive directement sur la demande.
 
 Le **responsable** qui reçoit les emails est celui de la **règle spéciale** du jour s'il y en a
 une, sinon le **responsable général** (*Réglages généraux*). **Si aucun email de responsable
