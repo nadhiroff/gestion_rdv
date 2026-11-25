@@ -16,7 +16,7 @@ notifications email automatiques (Nodemailer), base de données MySQL, à déplo
   avant la déconnexion, plus des notifications de succès à la connexion / déconnexion
 - Envoi automatique d'email au responsable à chaque demande + accusé de réception au client
 - L'admin peut **accepter** ou **refuser** une demande → email automatique envoyé au client
-- Bouton "Tester l'envoi d'email" dans l'espace admin pour vérifier la configuration SMTP en un clic
+- Changement du code d'accès admin depuis l'espace admin (Réglages généraux), code actuel exigé
 - Filtrage des rendez-vous par jour précis, par période, par statut, avec un bouton "Aujourd'hui"
 - Stockage MySQL (aucune donnée en localStorage côté client, tout passe par l'API)
 
@@ -70,10 +70,8 @@ C'est presque toujours l'une de ces deux causes, dans cet ordre de fréquence :
 **Pour vérifier que c'est résolu, dans cet ordre :**
 1. **Au redémarrage du serveur**, un message `SMTP OK : connexion...` ou `SMTP INDISPONIBLE : ...`
    s'affiche automatiquement dans les logs (`npm start` / `journalctl -u rdv-api -f` en systemd).
-2. Utilisez le bouton **"Tester l'envoi d'email"** dans Administration → Responsable & capacité : il
-   envoie un email réel et affiche l'erreur précise si ça échoue encore, sans jamais faire planter
-   l'API (la réponse reste HTTP 200 même en cas d'échec, pour éviter les faux "502 Bad Gateway" dans
-   la console du navigateur).
+2. Faites une demande de rendez-vous de test : le responsable et le client doivent recevoir un email.
+   En cas d'échec, l'erreur exacte est écrite dans les journaux du serveur (l'API ne plante jamais).
 3. **L'email du responsable doit être renseigné** dans Administration → Responsable & capacité. S'il
    est vide, aucun email de nouvelle demande n'est envoyé — c'est la cause la plus fréquente d'un
    "responsable qui ne reçoit rien" une fois le SMTP réparé.

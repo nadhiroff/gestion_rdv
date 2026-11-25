@@ -375,11 +375,12 @@
   .footer-section p { font-size: 0.85rem; color: var(--ink-soft); margin: 6px 0 0 0; line-height: 1.5; }
   .footer-link { color: var(--accent); text-decoration: none; font-weight: 600; transition: all 0.3s; }
   .footer-link:hover { color: #dc2626; animation: socialPulse 0.6s ease-in-out; }
-  .social-links { display: flex; flex-direction: row; gap: 16px; align-items: center; }
-  .social-link { color: var(--ink-soft); text-decoration: none; transition: all 0.3s; display: flex; align-items: center; justify-content: center; }
-  .social-link:hover { color: #dc2626; animation: socialPulse 0.6s ease-in-out; }
-  .social-link svg { transition: all 0.3s; }
-  .social-link:hover svg { transform: scale(1.15); }
+  .legal-box { max-width: 680px; }
+  .legal-body { max-height: min(70vh, 640px); overflow-y: auto; font-size: 0.88rem; line-height: 1.6; color: var(--ink); }
+  .legal-body h4 { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; margin: 18px 0 6px; color: var(--accent-dark); }
+  .legal-body p { margin: 0 0 8px; }
+  .legal-body ul { margin: 0 0 8px; padding-left: 20px; }
+  .legal-body a { color: var(--accent); font-weight: 600; }
 
   @keyframes socialPulse {
     0%, 100% { color: #dc2626; }
@@ -486,7 +487,8 @@ const state = {
   filters: { date: '', from: '', to: '', status: '' },
   newBlock: { id: null, date_debut: '', date_fin: '', motif: '' },
   showPastExceptions: false,
-  testEmail: { loading: false, result: null },
+  codeChanging: false,
+  legalModal: null, // 'privacy' | 'terms'
   newOverride: { id: null, date_debut: '', date_fin: '', max_par_jour: '', responsable_nom: '', responsable_email: '', motif: '' },
   toast: null,
   confirmDialog: null,
@@ -503,7 +505,15 @@ function fmtDateLong(iso) {
 function fmtDateShort(iso) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('fr-FR');
 }
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+// Date du jour selon l'heure locale (pas UTC : sinon entre minuit et 1h au Bénin on est « la veille »)
+function todayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// Échappe un texte avant de l'insérer dans le HTML (noms, emails… saisis par les visiteurs)
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 function showToast(type, message) {
   state.toast = { type, message };
@@ -827,7 +837,7 @@ function renderSlotForm() {
         <div class="field"><label>Responsable ${state.slotForm.autoDetected ? '(détecté automatiquement)' : '(optionnel)'}</label>
           <select id="slot-responsable" ${state.slotForm.autoDetected ? 'disabled' : ''}>
             <option value="">-- Aucun responsable spécifique --</option>
-            ${state.responsables.map(r => `<option value="${r.id}" ${state.slotForm.responsable_id == r.id ? 'selected' : ''}>${r.nom} (${r.email})</option>`).join('')}
+            ${state.responsables.map(r => `<option value="${r.id}" ${state.slotForm.responsable_id == r.id ? 'selected' : ''}>${esc(r.nom)} (${esc(r.email)})</option>`).join('')}
           </select>
           ${state.slotForm.autoDetected ? '<input type="hidden" id="slot-responsable-hidden" value="' + state.slotForm.responsable_id + '" />' : ''}
         </div>
@@ -845,7 +855,7 @@ function deleteBooking(id) {
   const b = state.bookings.find((x) => x.id === id);
   showConfirmDialog({
     title: 'Supprimer ce rendez-vous ?',
-    message: b ? `La demande de ${b.prenom} ${b.nom} pour le ${fmtDateShort(b.date)} sera définitivement supprimée. Cette action est irréversible.` : 'Cette action est irréversible.',
+    message: b ? `La demande de ${esc(b.prenom)} ${esc(b.nom)} pour le ${fmtDateShort(b.date)} sera définitivement supprimée. Cette action est irréversible.` : 'Cette action est irréversible.',
     confirmLabel: 'Supprimer',
     danger: true,
     onConfirm: async () => {
@@ -1009,6 +1019,7 @@ function render() {
     ${state.view === 'client' ? renderClient() : renderAdmin()}
     ${state.showBookingModal ? renderBookingModal() : ''}
     ${renderConfirmDialogModal()}
+    ${state.legalModal ? renderLegalModal() : ''}
     <footer class="app-footer">
       <div class="footer-top">
         <p class="footer-tagline">Réservez votre rendez-vous en ligne facilement et rapidement</p>
@@ -1020,16 +1031,13 @@ function render() {
         </div>
         <div class="footer-section">
           <h4>Contact</h4>
-          <p>Email: <a href="mailto:contact@exemple.com" class="footer-link">contact@exemple.com</a></p>
-          <p>Tél: +229 01 45 78 97 64</p>
+          <p>Email: <a href="mailto:rgz@rgz.bj" class="footer-link">rgz@rgz.bj</a></p>
+          <p>Tél: <a href="tel:+2290162000062" class="footer-link">+229 01 62 00 00 62</a></p>
         </div>
         <div class="footer-section">
-          <h4>Suivez-nous</h4>
-          <div class="social-links">
-            <a href="https://linkedin.com" target="_blank" class="social-link linkedin">${ic('linkedin', 24)}</a>
-            <a href="https://facebook.com" target="_blank" class="social-link facebook">${ic('facebook', 24)}</a>
-            <a href="https://wa.me/+2290145789764" target="_blank" class="social-link whatsapp">${ic('whatsapp', 24)}</a>
-          </div>
+          <h4>Informations légales</h4>
+          <p><a href="#" class="footer-link" onclick="openLegal('privacy');return false">Politique de confidentialité</a></p>
+          <p><a href="#" class="footer-link" onclick="openLegal('terms');return false">Conditions d'utilisation</a></p>
         </div>
         <div class="footer-section">
           <h4>Horaires</h4>
@@ -1195,9 +1203,9 @@ function renderBookingModal() {
             <div class="sub" style="color:var(--ink-soft);font-size:0.86rem">Votre créneau est réservé, en attente de validation</div>
             <div class="confirm-date">${ic('calendar',14)} ${fmtDateLong(c.date)}</div>
             <div class="confirm-detail">
-              <div class="drow"><span class="dic">${ic('user',15)}</span><span class="dtxt"><span class="dlabel">Nom complet</span><span class="dval">${c.prenom} ${c.nom}</span></span></div>
-              <div class="drow"><span class="dic">${ic('phone',15)}</span><span class="dtxt"><span class="dlabel">Téléphone</span><span class="dval">${c.tel}</span></span></div>
-              <div class="drow"><span class="dic">${ic('mail',15)}</span><span class="dtxt"><span class="dlabel">Email</span><span class="dval">${c.email}</span></span></div>
+              <div class="drow"><span class="dic">${ic('user',15)}</span><span class="dtxt"><span class="dlabel">Nom complet</span><span class="dval">${esc(c.prenom)} ${esc(c.nom)}</span></span></div>
+              <div class="drow"><span class="dic">${ic('phone',15)}</span><span class="dtxt"><span class="dlabel">Téléphone</span><span class="dval">${esc(c.tel)}</span></span></div>
+              <div class="drow"><span class="dic">${ic('mail',15)}</span><span class="dtxt"><span class="dlabel">Email</span><span class="dval">${esc(c.email)}</span></span></div>
             </div>
             ${c.emailClientEnvoye !== undefined ? `
             <div class="email-status-row">
@@ -1221,12 +1229,12 @@ function renderBookingModal() {
         </div>
         <div class="modal-body">
           <div class="row2">
-            <div class="field"><label>Nom</label><input id="f-nom" value="${state.form.nom}" placeholder="Diallo" /></div>
-            <div class="field"><label>Prénom</label><input id="f-prenom" value="${state.form.prenom}" placeholder="Aminata" /></div>
+            <div class="field"><label>Nom</label><input id="f-nom" value="${esc(state.form.nom)}" placeholder="Diallo" /></div>
+            <div class="field"><label>Prénom</label><input id="f-prenom" value="${esc(state.form.prenom)}" placeholder="Aminata" /></div>
           </div>
           <div class="row2">
-            <div class="field"><label>Téléphone</label><input id="f-tel" value="${state.form.tel}" placeholder="+229 00 00 00 00" /></div>
-            <div class="field"><label>Email</label><input id="f-email" type="email" value="${state.form.email}" placeholder="vous@email.com" /></div>
+            <div class="field"><label>Téléphone</label><input id="f-tel" value="${esc(state.form.tel)}" placeholder="+229 00 00 00 00" /></div>
+            <div class="field"><label>Email</label><input id="f-email" type="email" value="${esc(state.form.email)}" placeholder="vous@email.com" /></div>
           </div>
           ${state.formError ? `<div class="msg error">${ic('ban',15)}${state.formError}</div>` : ''}
           <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="submitBooking()" ${state.submitting ? 'disabled' : ''}>
@@ -1298,9 +1306,9 @@ function renderAdmin() {
               ${state.bookings.map(b => `
                 <tr>
                   <td>${fmtDateShort(b.date)}</td>
-                  <td>${b.prenom} ${b.nom}</td>
-                  <td>${b.tel}</td>
-                  <td>${b.email}</td>
+                  <td>${esc(b.prenom)} ${esc(b.nom)}</td>
+                  <td>${esc(b.tel)}</td>
+                  <td>${esc(b.email)}</td>
                   <td><span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span></td>
                   <td>
                     <div class="row-actions">
@@ -1323,8 +1331,8 @@ function renderAdmin() {
       <div class="panel">
         <h3>${ic('user', 18)} Responsable &amp; capacité</h3>
         <div class="sub">Qui reçoit les notifications, et combien de rendez-vous par jour</div>
-        <div class="field"><label>Nom du responsable</label><input id="s-nom" value="${s.responsable_nom || ''}" placeholder="Ex: M. Traoré" /></div>
-        <div class="field"><label>Email du responsable</label><input id="s-email" type="email" value="${s.responsable_email || ''}" placeholder="responsable@entreprise.fr" /></div>
+        <div class="field"><label>Nom du responsable</label><input id="s-nom" value="${esc(s.responsable_nom)}" placeholder="Ex: M. Traoré" /></div>
+        <div class="field"><label>Email du responsable</label><input id="s-email" type="email" value="${esc(s.responsable_email)}" placeholder="responsable@entreprise.fr" /></div>
         <div class="field">
           <label>Rendez-vous max / jour (valeur par défaut)</label>
           <input id="s-max" type="number" min="1" value="${s.max_par_jour}" />
@@ -1346,15 +1354,19 @@ function renderAdmin() {
           <div class="recap-title">Récapitulatif actuel</div>
           <div class="recap-row"><span>Jours ouverts</span><b>${openDays.length ? openDays.join(', ') : 'Aucun'}</b></div>
           <div class="recap-row"><span>Capacité par semaine</span><b>${openDays.length * (Number(s.max_par_jour) || 0)} rendez-vous</b></div>
-          <div class="recap-row"><span>Notifications envoyées à</span><b>${s.responsable_email || '<span style="color:var(--danger)">aucun email !</span>'}</b></div>
+          <div class="recap-row"><span>Notifications envoyées à</span><b>${s.responsable_email ? esc(s.responsable_email) : '<span style="color:var(--danger)">aucun email !</span>'}</b></div>
         </div>
         <div class="recap">
-          <div class="recap-title">Vérifier les emails</div>
-          <p class="hint" style="margin:0 0 10px">Envoie un email de test au responsable pour s'assurer que les notifications partent bien.</p>
-          <button class="btn btn-secondary btn-sm" onclick="sendTestEmail()" ${state.testEmail.loading ? 'disabled' : ''}>
-            ${state.testEmail.loading ? '<span class="spinner"></span> Envoi…' : ic('mail',15) + " Tester l'envoi d'email"}
+          <div class="recap-title">Code d'accès admin</div>
+          <p class="hint" style="margin:0 0 10px">Changez le code qui protège cet espace. Le code actuel est demandé par sécurité.</p>
+          <div class="row2">
+            <div class="field" style="margin-bottom:8px"><label>Code actuel</label><input id="c-current" type="password" autocomplete="current-password" /></div>
+            <div class="field" style="margin-bottom:8px"><label>Nouveau code</label><input id="c-new" type="password" autocomplete="new-password" placeholder="4 caractères min." /></div>
+          </div>
+          <div class="field" style="margin-bottom:10px"><label>Confirmer le nouveau code</label><input id="c-confirm" type="password" autocomplete="new-password" /></div>
+          <button class="btn btn-secondary btn-sm" onclick="changeAdminCode()" ${state.codeChanging ? 'disabled' : ''}>
+            ${state.codeChanging ? '<span class="spinner"></span> Enregistrement…' : ic('lock',15) + ' Changer le code'}
           </button>
-          ${state.testEmail.result ? `<div class="msg ${state.testEmail.result.ok ? 'ok' : 'error'}">${ic(state.testEmail.result.ok ? 'checkCircle' : 'ban',15)} ${state.testEmail.result.ok ? 'Email envoyé à ' + state.testEmail.result.to + ' — vérifiez la boîte de réception.' : state.testEmail.result.error}</div>` : ''}
         </div>
         <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
@@ -1379,7 +1391,7 @@ function renderAdmin() {
           <div class="field"><label>Date de début</label><input id="b-debut" type="date" value="${state.newBlock.date_debut}" /></div>
           <div class="field"><label>Date de fin (optionnel)</label><input id="b-fin" type="date" value="${state.newBlock.date_fin}" /></div>
         </div>
-        <div class="field"><label>Motif (optionnel)</label><input id="b-motif" value="${state.newBlock.motif}" placeholder="Congés, formation, jour férié..." /></div>
+        <div class="field"><label>Motif (optionnel)</label><input id="b-motif" value="${esc(state.newBlock.motif)}" placeholder="Congés, formation, jour férié..." /></div>
         <p class="hint">${ic('info',14)} Le motif est visible uniquement par vous, dans la liste ci-dessous et dans le détail du jour.</p>
         <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="submitBlockedDate()">${state.newBlock.id ? ic('check',15) + ' Mettre à jour' : ic('plus',15) + ' Bloquer'}</button>
@@ -1397,10 +1409,10 @@ function renderAdmin() {
         </div>
         <div class="field"><label>Max rendez-vous / jour (vide = ${s.max_par_jour}, la valeur générale)</label><input id="o-max" type="number" min="0" value="${state.newOverride.max_par_jour}" placeholder="Ex: 5" /></div>
         <div class="row2">
-          <div class="field"><label>Responsable dédié (optionnel)</label><input id="o-nom" value="${state.newOverride.responsable_nom}" placeholder="Ex: Mme Koné" /></div>
-          <div class="field"><label>Son email (optionnel)</label><input id="o-email" type="email" value="${state.newOverride.responsable_email}" placeholder="autre@entreprise.fr" /></div>
+          <div class="field"><label>Responsable dédié (optionnel)</label><input id="o-nom" value="${esc(state.newOverride.responsable_nom)}" placeholder="Ex: Mme Koné" /></div>
+          <div class="field"><label>Son email (optionnel)</label><input id="o-email" type="email" value="${esc(state.newOverride.responsable_email)}" placeholder="autre@entreprise.fr" /></div>
         </div>
-        <div class="field"><label>Motif (optionnel)</label><input id="o-motif" value="${state.newOverride.motif}" placeholder="Ex: forte affluence, remplaçant..." /></div>
+        <div class="field"><label>Motif (optionnel)</label><input id="o-motif" value="${esc(state.newOverride.motif)}" placeholder="Ex: forte affluence, remplaçant..." /></div>
         <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="submitOverride()">${state.newOverride.id ? ic('check',15) + ' Mettre à jour' : ic('plus',15) + ' Ajouter la règle'}</button>
           ${state.newOverride.id ? `<button class="btn btn-ghost btn-sm" onclick="cancelEditOverride()">Annuler</button>` : ''}
@@ -1487,7 +1499,7 @@ function exceptionRow(x, compact) {
       <span class="exc-type ${isBlock ? 'block' : 'override'}">${ic(isBlock ? 'ban' : 'users', 13)} ${isBlock ? 'Bloqué' : 'Règle spéciale'}</span>
       <div class="exc-main">
         <div class="exc-dates">${fmtPeriod(it.date_debut, it.date_fin)}${inverted ? ` <span class="exc-warn" title="La date de fin est avant la date de début : cette période ne s'applique à aucun jour">${ic('info',13)} dates inversées</span>` : ''}</div>
-        <div class="exc-detail">${isBlock ? (it.motif || 'Sans motif') : overrideSummary(it) + (it.motif ? ' — ' + it.motif : '')}</div>
+        <div class="exc-detail">${isBlock ? esc(it.motif || 'Sans motif') : esc(overrideSummary(it) + (it.motif ? ' — ' + it.motif : ''))}</div>
       </div>
       ${compact ? '' : `<span class="exc-status ${x.st}">${PERIOD_LABEL[x.st]}</span>`}
       <div class="block-actions">
@@ -1526,7 +1538,7 @@ function renderUpcoming() {
         <div class="recap-title">Réglage général</div>
         <div class="recap-row"><span>Maximum par jour</span><b>${s.max_par_jour} rendez-vous</b></div>
         <div class="recap-row"><span>Fermé chaque</span><b>${closed.length ? closed.join(', ') : 'aucun jour'}</b></div>
-        <div class="recap-row"><span>Responsable</span><b>${s.responsable_nom || '—'}</b></div>
+        <div class="recap-row"><span>Responsable</span><b>${esc(s.responsable_nom || '—')}</b></div>
       </div>
       <div class="recap">
         <div class="recap-title">Exceptions en cours et à venir</div>
@@ -1567,8 +1579,8 @@ function renderDayDetails(iso) {
       <span class="day-status ${cls}">${status}</span>
       <div class="recap">
         <div class="recap-row"><span>Rendez-vous</span><b>${closed || blocks.length ? '—' : `${taken} / ${max}${o && o.max_par_jour != null ? ' <em>(règle spéciale)</em>' : ''}`}</b></div>
-        <div class="recap-row"><span>Responsable</span><b>${respNom || '—'}${o && (o.responsable_nom || o.responsable_email) ? ' <em>(règle spéciale)</em>' : ''}</b></div>
-        <div class="recap-row"><span>Emails envoyés à</span><b>${respEmail || '—'}</b></div>
+        <div class="recap-row"><span>Responsable</span><b>${esc(respNom || '—')}${o && (o.responsable_nom || o.responsable_email) ? ' <em>(règle spéciale)</em>' : ''}</b></div>
+        <div class="recap-row"><span>Emails envoyés à</span><b>${esc(respEmail || '—')}</b></div>
       </div>
       <div class="recap">
         <div class="recap-title">Exceptions sur ce jour</div>
@@ -1629,16 +1641,18 @@ function togglePastExceptions() {
   state.showPastExceptions = !state.showPastExceptions;
   render();
 }
-async function sendTestEmail() {
-  state.testEmail = { loading: true, result: null };
-  render();
+async function changeAdminCode() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const currentCode = v('c-current'), newCode = v('c-new'), confirm = v('c-confirm');
+  if (!currentCode || !newCode) return showToast('error', 'Renseignez le code actuel et le nouveau code.');
+  if (newCode.length < 4) return showToast('error', 'Le nouveau code doit faire au moins 4 caractères.');
+  if (newCode !== confirm) return showToast('error', 'La confirmation ne correspond pas au nouveau code.');
+  state.codeChanging = true; render();
   try {
-    state.testEmail.result = await api('/admin/test-email', { method: 'POST', body: '{}' });
-  } catch (e) {
-    state.testEmail.result = { ok: false, error: e.message };
-  }
-  state.testEmail.loading = false;
-  render();
+    await api('/admin/change-code', { method: 'POST', body: JSON.stringify({ currentCode, newCode }) });
+    showToast('success', 'Code admin modifié. Utilisez le nouveau code à la prochaine connexion.');
+  } catch (e) { showToast('error', e.message); }
+  state.codeChanging = false; render();
 }
 
 /* ===================== Petits helpers d'inputs ===================== */
@@ -1690,7 +1704,74 @@ function attachFormListeners() {
   bind('f-nom', 'nom'); bind('f-prenom', 'prenom'); bind('f-tel', 'tel'); bind('f-email', 'email');
   document.addEventListener('keydown', escHandler);
 }
+/* ===================== Politique de confidentialité / Conditions d'utilisation ===================== */
+const LEGAL_UPDATED = '25 novembre 2026';
+const LEGAL = {
+  privacy: {
+    title: 'Politique de confidentialité',
+    html: `
+      <p>RGZ SARL accorde une grande importance à la protection de vos données personnelles. Cette page explique quelles informations sont collectées lorsque vous demandez un rendez-vous, pourquoi, et quels sont vos droits.</p>
+      <h4>1. Responsable du traitement</h4>
+      <p>RGZ SARL — contact : <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a> · <a href="tel:+2290162000062">+229 01 62 00 00 62</a>.</p>
+      <h4>2. Données collectées</h4>
+      <p>Uniquement celles que vous saisissez dans le formulaire de demande :</p>
+      <ul><li>nom et prénom ;</li><li>numéro de téléphone ;</li><li>adresse email ;</li><li>date du rendez-vous souhaité.</li></ul>
+      <p>Aucun cookie publicitaire ni outil de suivi n'est utilisé sur ce site.</p>
+      <h4>3. Pourquoi ces données ?</h4>
+      <p>Elles servent exclusivement à traiter votre demande : l'examiner, vous confirmer ou refuser le rendez-vous par email, et vous contacter si nécessaire. Elles ne sont jamais vendues, louées ni utilisées à des fins commerciales.</p>
+      <h4>4. Qui y a accès ?</h4>
+      <p>Seules les personnes chargées de gérer les rendez-vous au sein de RGZ SARL. L'envoi des emails passe par notre messagerie professionnelle ; l'hébergement est assuré sur un serveur sécurisé.</p>
+      <h4>5. Durée de conservation</h4>
+      <p>Vos données sont conservées pendant 12 mois après la date du rendez-vous, puis supprimées. Une demande refusée peut être supprimée plus tôt.</p>
+      <h4>6. Vos droits</h4>
+      <p>Conformément à la loi n° 2017-20 du 20 avril 2018 portant Code du numérique en République du Bénin (Livre V, protection des données à caractère personnel), vous pouvez à tout moment :</p>
+      <ul><li>accéder aux données vous concernant ;</li><li>les faire corriger ;</li><li>demander leur suppression ;</li><li>vous opposer à leur traitement.</li></ul>
+      <p>Il suffit d'écrire à <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a>. Si vous estimez que vos droits ne sont pas respectés, vous pouvez saisir l'Autorité de Protection des Données à caractère Personnel (APDP).</p>
+      <h4>7. Sécurité</h4>
+      <p>Les échanges avec le site sont chiffrés (HTTPS) et l'espace d'administration est protégé par un code d'accès.</p>`,
+  },
+  terms: {
+    title: "Conditions d'utilisation",
+    html: `
+      <p>Ce service permet de demander un rendez-vous auprès de RGZ SARL. En l'utilisant, vous acceptez les conditions ci-dessous.</p>
+      <h4>1. Fonctionnement</h4>
+      <p>Vous choisissez un jour disponible et envoyez une <strong>demande</strong>. Cette demande n'est pas encore un rendez-vous confirmé : elle est examinée par le responsable, qui l'accepte ou la refuse. Vous recevez un email dans les deux cas, avec l'heure du rendez-vous en cas d'acceptation.</p>
+      <h4>2. Nombre de places</h4>
+      <p>Chaque jour dispose d'un nombre limité de places. Une place est réservée dès l'envoi de votre demande et libérée si elle est refusée. Un jour affiché « Complet » ne peut plus être demandé.</p>
+      <h4>3. Exactitude des informations</h4>
+      <p>Merci d'indiquer des coordonnées exactes : elles sont indispensables pour vous confirmer le rendez-vous. Une demande avec des coordonnées erronées peut être refusée.</p>
+      <h4>4. Annulation ou modification</h4>
+      <p>Pour annuler ou déplacer un rendez-vous, prévenez-nous le plus tôt possible à <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a> ou au <a href="tel:+2290162000062">+229 01 62 00 00 62</a>, afin de libérer la place pour une autre personne.</p>
+      <h4>5. Usage du service</h4>
+      <p>Le service doit être utilisé de bonne foi. Les demandes abusives ou répétées sans motif peuvent être refusées.</p>
+      <h4>6. Disponibilité</h4>
+      <p>Nous faisons notre possible pour que le site soit accessible en permanence, mais il peut être temporairement indisponible (maintenance, incident technique).</p>
+      <h4>7. Contact</h4>
+      <p>Pour toute question : <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a>.</p>`,
+  },
+};
+function openLegal(kind) { state.legalModal = kind; render(); }
+function closeLegal() { state.legalModal = null; render(); }
+function renderLegalModal() {
+  const doc = LEGAL[state.legalModal];
+  if (!doc) return '';
+  return `
+    <div class="modal-overlay" onclick="if(event.target===this) closeLegal()">
+      <div class="modal-box legal-box">
+        <div class="modal-head">
+          <div>
+            <h3>${doc.title}</h3>
+            <div class="sub" style="text-transform:none">Dernière mise à jour : ${LEGAL_UPDATED}</div>
+          </div>
+          <button class="modal-close" onclick="closeLegal()" title="Fermer">${ic('close', 17)}</button>
+        </div>
+        <div class="modal-body legal-body">${doc.html}</div>
+      </div>
+    </div>`;
+}
+
 function escHandler(e) {
+  if (e.key === 'Escape' && state.legalModal) return closeLegal();
   if (e.key === 'Escape' && state.showBookingModal) closeBookingModal();
 }
 

@@ -58,11 +58,11 @@ Les emails (confirmation de rendez-vous, notifications admin) exigent un vrai SM
 
 - **Gmail** : activer la 2FA puis créer un **mot de passe d'application** sur
   https://myaccount.google.com/apppasswords — 16 caractères, **sans espaces**.
-  Le port 587 / `secure=false` est déjà configuré dans le compose.
+  Le port 587 / `secure=false` est la valeur par défaut du serveur : rien à configurer.
 - **Autre fournisseur** (OVH, o2switch, etc.) : adaptez `SMTP_HOST`, `SMTP_USER`,
   `SMTP_PASSWORD` dans les variables d'environnement.
 
-Pour vérifier : espace **Administration → Responsable & capacité → « Tester l'envoi d'email »**.
+Pour vérifier : au démarrage, les journaux d'exécution affichent `SMTP OK` ou `SMTP INDISPONIBLE` avec le détail de l'erreur.
 
 ## 5. Premier déploiement
 
@@ -86,5 +86,7 @@ Le schéma SQL est rejoué à chaque démarrage (`IF NOT EXISTS` : sans effet de
 |---|---|
 | `Échec de l’initialisation de la base` | `DATABASE_URL` incorrecte → recopier « MySQL URL (internal) » depuis la fiche de la base Coolify |
 | Site OK mais calendrier vide / erreur API | conteneur pas encore démarré ou base injoignable — vérifier les logs |
-| Emails non reçus | `SMTP_*` invalides → tester avec « Tester l'envoi d'email » dans l'admin |
-| Erreur CORS dans la console navigateur |rare : `FRONTEND_ORIGIN` — remettre `*` dans le compose |
+| Emails non reçus | `SMTP_*` invalides → regarder la ligne `SMTP OK` / `SMTP INDISPONIBLE` dans les journaux d'exécution |
+| Erreur CORS dans la console navigateur | rare : une variable `FRONTEND_ORIGIN` a été ajoutée dans Coolify — la supprimer (par défaut : `*`) |
+| Redémarrage en boucle, `getaddrinfo EAI_AGAIN <hôte>` | l'appli n'est pas sur le réseau de la base : vérifier `networks: [coolify]` dans `docker-compose.yml` |
+| « Bad Gateway » alors que les logs sont bons | mauvais port : *Domains* › « Internal port » doit valoir **4000** (Coolify met 3000 par défaut) |
