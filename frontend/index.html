@@ -260,7 +260,12 @@
 
   /* ---------- Toast ---------- */
   .toast-wrap { position: fixed; bottom: 22px; right: 22px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
-  @media (max-width: 600px) { .toast-wrap { left: 16px; right: 16px; bottom: 16px; } }
+  /* Téléphone : en haut de l'écran (en bas, elle gênait les boutons), toute la largeur */
+  @media (max-width: 600px) {
+    .toast-wrap { left: 12px; right: 12px; bottom: auto; top: calc(12px + env(safe-area-inset-top, 0px)); }
+    .toast { max-width: none; animation-name: slideDownToast; cursor: pointer; }
+  }
+  @keyframes slideDownToast { from { opacity: 0; transform: translateY(-14px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
   .toast { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); font-size: 0.86rem; font-weight: 600; animation: slideUpToast .25s cubic-bezier(.2,.9,.3,1.1); max-width: 360px; }
   .toast.success { background: var(--ink); color: #fff; }
   .toast.success svg { color: #4ADE80; }
@@ -528,7 +533,8 @@ function renderToast() {
   const root = document.getElementById('toast-root');
   if (!state.toast) { root.innerHTML = ''; return; }
   const t = state.toast;
-  root.innerHTML = `<div class="toast-wrap"><div class="toast ${t.type}">${ic(t.type === 'success' ? 'checkCircle' : 'ban', 19)}<span>${t.message}</span></div></div>`;
+  // Un appui sur la notification la ferme tout de suite
+  root.innerHTML = `<div class="toast-wrap"><div class="toast ${t.type}" role="status" onclick="clearTimeout(window.__toastTimer); state.toast = null; renderToast();">${ic(t.type === 'success' ? 'checkCircle' : 'ban', 19)}<span>${esc(t.message)}</span></div></div>`;
 }
 
 /* ---- Boîte de confirmation générique (suppression, déconnexion...) ---- */
