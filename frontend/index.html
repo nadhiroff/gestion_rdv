@@ -367,6 +367,7 @@
   .status-pill.pending { background: var(--warning-soft); color: var(--warning); }
   .status-pill.accepted { background: var(--success-soft); color: var(--success); }
   .status-pill.rejected { background: var(--danger-soft); color: var(--danger); }
+  .slot-panel { margin-bottom: 18px; border: 2px solid var(--accent); background: var(--accent-soft); scroll-margin: 90px; }
   .status-pill.cancelled { background: var(--closed-soft); color: #5B6476; }
   .row-actions { display: flex; gap: 6px; }
 
@@ -406,6 +407,18 @@
   .cancel-actions .btn { flex: 1 1 180px; justify-content: center; }
   .cancel-contact { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 0.88rem; margin: 0 0 16px; }
   .cancel-contact a { color: var(--accent); font-weight: 600; }
+  .act-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+  @media (max-width: 480px) { .act-grid { grid-template-columns: 1fr; } }
+  .act-tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); text-decoration: none; }
+  .act-tile b { font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; line-height: 1.1; }
+  .act-tile span { font-size: 0.76rem; color: var(--ink-soft); line-height: 1.35; }
+  a.act-tile:hover { border-color: var(--accent); }
+  .act-tile.warn { border-color: #F3D9A4; background: var(--warning-soft); }
+  .act-tile.warn b { color: var(--warning); }
+  .act-bar-label { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 6px; }
+  .act-bar-label b { color: var(--ink); font-weight: 600; }
+  .act-bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .act-bar > div { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-light)); }
   .legal-box { max-width: 680px; }
   .legal-body { max-height: min(70vh, 640px); overflow-y: auto; font-size: 0.88rem; line-height: 1.6; color: var(--ink); }
   .legal-body h4 { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; margin: 18px 0 6px; color: var(--accent-dark); }
@@ -536,7 +549,8 @@ const state = {
   newBlock: { id: null, date_debut: '', date_fin: '', motif: '' },
   showPastExceptions: false,
   codeChanging: false,
-  adminMenuOpen: false, // menu ☰ de l'admin sur téléphone
+  adminMenuOpen: false,
+  stats: null, // bloc « Activité » + pastille des demandes en attente // menu ☰ de l'admin sur téléphone
   legalModal: null, // 'privacy' | 'terms'
   newOverride: { id: null, date_debut: '', date_fin: '', max_par_jour: '', responsable_nom: '', responsable_email: '', motif: '' },
   toast: null,
@@ -755,7 +769,7 @@ async function loadBookings() {
   if (to) params.set('to', to);
   if (status) params.set('status', status);
   try {
-    state.bookings = await api('/admin/bookings?' + params.toString());
+    [state.bookings, state.stats] = await Promise.all([api('/admin/bookings?' + params.toString()), api('/admin/stats')]);
   } catch (e) { showToast('error', e.message); }
   render();
 }
@@ -774,6 +788,35 @@ function changeStatusFilter(v) {
   loadBookings();
 }
 
+// Bloc « Activité » (Réglages généraux) : ce que le responsable doit savoir d'un coup d'œil
+function renderActivity() {
+  const st = state.stats;
+  if (!st) return '';
+  const pct = st.semaine.capacite ? Math.round(st.semaine.pris / st.semaine.capacite * 100) : 0;
+  const goPending = "state.adminSection='rdv'; state.filters={date:'',from:'',to:'',status:'pending'}; try{localStorage.setItem('rdv_admin_section','rdv')}catch(e){}; loadBookings(); return false";
+  return `
+        <div class="recap activity">
+          <div class="recap-title">Activité</div>
+          <div class="act-grid">
+            <a href="#" class="act-tile ${st.en_attente ? 'warn' : ''}" onclick="${goPending}">
+              <b>${st.en_attente}</b><span>demande${st.en_attente > 1 ? 's' : ''} en attente${st.en_attente ? ' — à traiter' : ''}</span>
+            </a>
+            <div class="act-tile"><b>${st.a_venir}</b><span>rendez-vous accepté${st.a_venir > 1 ? 's' : ''} à venir</span></div>
+            <div class="act-tile"><b>${st.annulations_30j}</b><span>annulation${st.annulations_30j > 1 ? 's' : ''} par les clients (30 jours)</span></div>
+          </div>
+          <div class="act-bar-label"><span>Remplissage des 7 prochains jours</span><b>${st.semaine.pris} / ${st.semaine.capacite} places (${pct} %)</b></div>
+          <div class="act-bar"><div style="width:${Math.min(pct, 100)}%"></div></div>
+        </div>`;
+}
+// « 09:00–09:30 · Nadhir » pour un rendez-vous accepté, « — » sinon
+function slotLabel(b) {
+  if (b.status !== 'accepted' || !b.heure_debut) return '<span style="color:var(--ink-faint)">—</span>';
+  const debut = String(b.heure_debut).slice(0, 5);
+  const [h, m] = debut.split(':').map(Number), t = h * 60 + m + (Number(b.duree) || 0);
+  const fin = `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  const r = state.responsables.find(x => x.id === b.responsable_id);
+  return `<b>${debut}–${fin}</b>${r ? `<br><span style="color:var(--ink-soft);font-size:.8rem">${esc(r.nom)}</span>` : ''}`;
+}
 async function setBookingStatus(id, status) {
   if (status === 'accepted') {
     // Ouvrir le formulaire de sélection de créneau
@@ -794,12 +837,19 @@ async function setBookingStatus(id, status) {
         autoResponsableId = responsable.id;
       }
     }
+    // Pas de règle spéciale ce jour-là : on propose le responsable général (modifiable)
+    let defaultResponsableId = autoResponsableId;
+    if (!defaultResponsableId && state.adminSettings) {
+      const g = state.responsables.find(r => state.adminSettings.responsable_email && r.email === state.adminSettings.responsable_email)
+        || state.responsables.find(r => r.nom === state.adminSettings.responsable_nom);
+      if (g) defaultResponsableId = g.id;
+    }
     
     state.slotForm = {
       bookingId: id,
       heure_debut: '',
       duree: '60',
-      responsable_id: autoResponsableId,
+      responsable_id: defaultResponsableId,
       autoDetected: !!autoResponsableId // Indicateur si le responsable a été détecté automatiquement
     };
     
@@ -811,8 +861,11 @@ async function setBookingStatus(id, status) {
       state.slotForm.heure_debut = `${hours}:${minutes}`;
     }
     
-    // Ne re-rendre que le formulaire de créneau au lieu de tout le DOM
+    // Ne re-rendre que le formulaire de créneau au lieu de tout le DOM, puis l'amener à l'écran
     renderSlotForm();
+    const box = document.getElementById('slot-form-container');
+    if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => document.getElementById('slot-heure')?.focus(), 350);
   } else {
     try {
       await api(`/admin/bookings/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
@@ -831,7 +884,7 @@ async function submitSlotForm() {
   const duree = document.getElementById('slot-duree')?.value || '';
   
   // Si le responsable est détecté automatiquement, utiliser la valeur du champ caché
-  const finalResponsableId = autoDetected ? responsable_id : (document.getElementById('slot-responsable')?.value || '');
+  const finalResponsableId = autoDetected ? responsable_id : (document.getElementById('slot-responsable')?.value || ''); // vide = responsable général (choisi par le serveur)
   
   if (!heure_debut || !duree) {
     showToast('error', 'Veuillez remplir l\'heure de début et la durée');
@@ -877,23 +930,33 @@ function renderSlotForm() {
   }
 
   if (state.slotForm.bookingId) {
+    const bk = state.bookings.find(x => x.id === state.slotForm.bookingId);
+    const f = state.slotForm;
+    const durees = [15, 30, 45, 60, 90, 120];
+    if (!durees.includes(Number(f.duree))) durees.push(Number(f.duree) || 60);
+    const minHeure = bk && bk.date === todayIso() ? (() => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })() : '';
+    const g = state.adminSettings || {};
     container.innerHTML = `
-      <div class="panel" style="margin-bottom:18px; border:2px solid var(--accent); background:var(--accent-soft)">
-        <h3>${ic('clock',18)} Choix du créneau horaire</h3>
-        <div class="sub">Sélectionnez l'heure de début, la durée et le responsable pour ce rendez-vous</div>
+      <div class="panel slot-panel">
+        <h3>${ic('clock',18)} Accepter la demande${bk ? ` de ${esc(bk.prenom)} ${esc(bk.nom)}` : ''}</h3>
+        <div class="sub">${bk ? `<b>${(d => d.charAt(0).toUpperCase() + d.slice(1))(fmtDateLong(bk.date))}</b> — ` : ''}choisissez l'heure, la durée et le responsable. Le visiteur recevra ces informations par email.</div>
         <div class="row2">
-          <div class="field"><label>Heure de début</label><input id="slot-heure" type="time" value="${state.slotForm.heure_debut}" /></div>
-          <div class="field"><label>Durée (minutes)</label><input id="slot-duree" type="number" min="15" step="15" value="${state.slotForm.duree}" placeholder="60" /></div>
+          <div class="field"><label>Heure de début</label><input id="slot-heure" type="time" value="${esc(f.heure_debut)}" ${minHeure ? `min="${minHeure}"` : ''} oninput="state.slotForm.heure_debut = this.value" /></div>
+          <div class="field"><label>Durée</label>
+            <select id="slot-duree" onchange="state.slotForm.duree = this.value">
+              ${durees.sort((x, y) => x - y).map(m => `<option value="${m}" ${Number(f.duree) === m ? 'selected' : ''}>${m < 60 ? m + ' min' : (m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) : '')}</option>`).join('')}
+            </select>
+          </div>
         </div>
-        <div class="field"><label>Responsable ${state.slotForm.autoDetected ? '(détecté automatiquement)' : '(optionnel)'}</label>
-          <select id="slot-responsable" ${state.slotForm.autoDetected ? 'disabled' : ''}>
-            <option value="">-- Aucun responsable spécifique --</option>
-            ${state.responsables.map(r => `<option value="${r.id}" ${state.slotForm.responsable_id == r.id ? 'selected' : ''}>${esc(r.nom)} (${esc(r.email)})</option>`).join('')}
+        <div class="field"><label>Responsable ${f.autoDetected ? '(fixé par la règle spéciale de ce jour)' : ''}</label>
+          <select id="slot-responsable" ${f.autoDetected ? 'disabled' : ''} onchange="state.slotForm.responsable_id = this.value">
+            ${f.autoDetected ? '' : `<option value="">Responsable général${g.responsable_nom ? ' (' + esc(g.responsable_nom) + ')' : ''}</option>`}
+            ${state.responsables.map(r => `<option value="${r.id}" ${f.responsable_id == r.id ? 'selected' : ''}>${esc(r.nom)}${r.email ? ' (' + esc(r.email) + ')' : ''}</option>`).join('')}
           </select>
-          ${state.slotForm.autoDetected ? '<input type="hidden" id="slot-responsable-hidden" value="' + state.slotForm.responsable_id + '" />' : ''}
+          <p class="hint" style="margin-top:6px">${ic('info',14)}<span>Deux rendez-vous qui se chevauchent pour le même responsable sont refusés automatiquement.</span></p>
         </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="submitSlotForm()">${ic('check',15)} Confirmer le créneau</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="submitSlotForm()">${ic('check',15)} Confirmer et prévenir le visiteur</button>
           <button class="btn btn-ghost btn-sm" onclick="closeSlotForm()">Annuler</button>
         </div>
       </div>
@@ -1102,6 +1165,7 @@ function render() {
     </footer>
   `;
   attachFormListeners();
+  if (state.slotForm.bookingId && document.getElementById('slot-form-container')) renderSlotForm(); // garde le formulaire ouvert
   renderToast();
 }
 
@@ -1360,11 +1424,12 @@ function renderAdmin() {
         ${state.bookings.length === 0 ? `<div class="empty-state">${ic('users',26)}<span>Aucun rendez-vous pour ces critères.</span></div>` : `
         <div class="table-wrap">
           <table class="ledger">
-            <thead><tr><th>Date</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Créneau</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th></th></tr></thead>
             <tbody>
               ${state.bookings.map(b => `
                 <tr>
                   <td>${fmtDateShort(b.date)}</td>
+                  <td>${slotLabel(b)}</td>
                   <td>${esc(b.prenom)} ${esc(b.nom)}</td>
                   <td>${esc(b.tel)}</td>
                   <td>${esc(b.email)}</td>
@@ -1397,6 +1462,7 @@ function renderAdmin() {
           <input id="s-max" type="number" min="1" value="${s.max_par_jour}" />
         </div>
         <p class="hint">${ic('info',14)}<span>Besoin d'un autre maximum ou d'un autre responsable seulement certains jours ? Utilisez plutôt une <a href="#" onclick="setAdminSection('exceptions');return false">règle spéciale</a>.</span></p>
+        ${renderActivity()}
         <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="saveAdminSettings()">${ic('check',15)} Enregistrer</button>
         </div>
@@ -1514,7 +1580,7 @@ function renderAdmin() {
       <span class="amt-icon">${ic(state.adminMenuOpen ? 'close' : 'menu', 20)}</span>
     </button>
     <nav class="admin-nav ${state.adminMenuOpen ? 'open' : ''}" id="admin-nav">
-      ${navBtn('rdv', 'users', 'Rendez-vous')}
+      ${navBtn('rdv', 'users', 'Rendez-vous', state.stats && state.stats.en_attente)}
       ${navBtn('reglages', 'settings', 'Réglages généraux')}
       ${navBtn('exceptions', 'calendar', 'Congés & exceptions', activeExceptions)}
       <button class="admin-nav-extra" onclick="goToSite()">${ic('calendar', 16)} Voir le site</button>

@@ -590,7 +590,17 @@ app.patch('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
     if (!heure_debut || !duree) {
       return res.status(400).json({ error: 'Heure de début et durée requis pour accepter un rendez-vous' });
     }
-    
+    if (!/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(heure_debut))) {
+      return res.status(400).json({ error: 'Heure de début invalide (format attendu : 09:30).' });
+    }
+    const dureeMin = Number(duree);
+    if (!Number.isInteger(dureeMin) || dureeMin < 5 || dureeMin > 480) {
+      return res.status(400).json({ error: 'Durée invalide : un nombre de minutes entre 5 et 480.' });
+    }
+    if (appointmentStart({ date: booking.date, heure_debut }).getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'Cette heure est déjà passée : choisissez une heure à venir.' });
+    }
+
     // Détecter automatiquement le responsable depuis date_overrides si non spécifié
     finalResponsableId = responsable_id || null;
     
@@ -651,6 +661,24 @@ app.patch('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
       }
     }
     
+    // Toujours aucun responsable (ni choisi, ni règle spéciale) : on prend le responsable général.
+    // Sinon l'email du client n'indique personne ET aucun conflit d'horaire n'est vérifié.
+    if (!finalResponsableId) {
+      const s = await getSettings();
+      if (s && (s.responsable_email || s.responsable_nom)) {
+        const [found] = await pool.query(
+          'SELECT id, nom, email FROM responsables WHERE (email <> "" AND email = ?) OR nom = ? ORDER BY (email = ?) DESC, id ASC LIMIT 1',
+          [s.responsable_email || '', s.responsable_nom || '', s.responsable_email || '']
+        );
+        if (found.length) {
+          ({ id: finalResponsableId, nom: finalResponsableNom, email: finalResponsableEmail } = found[0]);
+        } else if (s.responsable_nom) {
+          const [ins] = await pool.query('INSERT INTO responsables (nom, email, actif) VALUES (?, ?, TRUE)', [s.responsable_nom, s.responsable_email || '']);
+          finalResponsableId = ins.insertId; finalResponsableNom = s.responsable_nom; finalResponsableEmail = s.responsable_email;
+        }
+      }
+    }
+
     // Récupérer les infos du responsable final
     if (finalResponsableId && !finalResponsableNom) {
       const [[resp]] = await pool.query('SELECT nom, email FROM responsables WHERE id = ?', [finalResponsableId]);
@@ -892,6 +920,44 @@ app.put('/api/admin/date-overrides/:id', asyncHandler(async (req, res) => {
 app.delete('/api/admin/date-overrides/:id', asyncHandler(async (req, res) => {
   await pool.query('DELETE FROM date_overrides WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
+}));
+
+// ---------- Statistiques de l'admin (bloc « Activité » + pastille des demandes en attente) ----------
+app.get('/api/admin/stats', asyncHandler(async (req, res) => {
+  const today = todayIso();
+  const [[c]] = await pool.query(
+    `SELECT
+       SUM(status = 'pending'   AND date >= ?) AS en_attente,
+       SUM(status = 'accepted'  AND date >= ?) AS a_venir,
+       SUM(status = 'cancelled' AND cancelled_at >= NOW() - INTERVAL 30 DAY) AS annulations_30j
+     FROM bookings`,
+    [today, today]
+  );
+  // Remplissage des 7 prochains jours : places prises / places ouvertes (jours fermés et bloqués exclus)
+  const settings = await getSettings();
+  const fermes = (settings.jours_fermes || '').split(',').filter(Boolean).map(Number);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+  const fin = days[6];
+  const overrides = await getOverridesInRange(today, fin);
+  const [blocked] = await pool.query('SELECT date_debut, date_fin FROM blocked_dates WHERE date_debut <= ? AND date_fin >= ?', [fin, today]);
+  const [taken] = await pool.query("SELECT date, COUNT(*) AS n FROM bookings WHERE date BETWEEN ? AND ? AND status IN ('pending','accepted') GROUP BY date", [today, fin]);
+  const takenMap = Object.fromEntries(taken.map((t) => [t.date, Number(t.n)]));
+  let capacite = 0, pris = 0;
+  for (const iso of days) {
+    if (fermes.includes(weekdayIndex(iso)) || blocked.some((b) => iso >= b.date_debut && iso <= b.date_fin)) continue;
+    capacite += Number(effectiveForDate(settings, pickOverrideForDate(overrides, iso)).max) || 0;
+    pris += takenMap[iso] || 0;
+  }
+  res.json({
+    en_attente: Number(c.en_attente) || 0,
+    a_venir: Number(c.a_venir) || 0,
+    annulations_30j: Number(c.annulations_30j) || 0,
+    semaine: { pris, capacite },
+  });
 }));
 
 // ---------- Annulation par le client (lien personnel reçu par email) ----------

@@ -83,10 +83,11 @@ ne peut plus être accepté par erreur.
 
 | Action | Ce qui se passe |
 |---|---|
-| **Accepter** | Choisir l'**heure de début**, la **durée** et, si besoin, le **responsable**. Le visiteur reçoit sa confirmation par email. |
+| **Accepter** | Cliquer sur « Accepter » ouvre un formulaire au nom du visiteur : choisir l'**heure de début** (une heure déjà passée est refusée), la **durée** (15 min à 2 h) et le **responsable**. Par défaut, c'est le responsable de la **règle spéciale** du jour s'il y en a une, sinon le **responsable général**. Le visiteur reçoit par email la date, l'heure, la durée et le nom du responsable. |
 | **Conflit d'horaire** | Si le responsable choisi a déjà un rendez-vous accepté qui **chevauche** ce créneau, l'acceptation est refusée. Exemple : 9 h 00–10 h 00 déjà pris, alors 9 h 30 est refusé, mais 10 h 00 est accepté. |
 | **Refuser** | Le visiteur reçoit un email de refus, et la place se libère. |
 | **Supprimer** | La demande est effacée définitivement (après confirmation). La place se libère. |
+| **Suivre** | La colonne **Créneau** du tableau affiche l'horaire et le responsable de chaque rendez-vous accepté (ex. « 09:00–09:30 · Nadhir »). Une **pastille rouge** sur l'onglet *Rendez-vous* indique le nombre de demandes en attente. Le bloc **Activité** (*Réglages généraux*) résume : demandes à traiter, rendez-vous à venir, annulations des 30 derniers jours, remplissage des 7 prochains jours. |
 | **Filtrer** | Cliquer sur un jour du calendrier affiche ses rendez-vous (recliquer pour tout réafficher). Filtre par statut : en attente, acceptés, refusés, annulés par le client. |
 
 Sur téléphone, les rubriques de l'admin sont regroupées dans un **menu ☰**.
