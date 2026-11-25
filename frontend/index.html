@@ -108,11 +108,14 @@
     min-width: 0; overflow: hidden; container-type: inline-size;
   }
   .badge { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .badge .b-num { display: none; }
+  .badge.ok.last { color: var(--warning); }
   .badge .b-short { display: none; width: 100%; height: 4px; border-radius: 2px; background: currentColor; }
   /* Case trop étroite (mobile, calendrier à côté d'un panneau) : barre de couleur au lieu du mot */
   @container (max-width: 62px) {
     .badge .b-long { display: none; }
     .badge .b-short { display: block; }
+    .badge .b-num { display: inline; }
     .badge.full, .badge.off { width: 100%; }
   }
   .cal-cell.empty { visibility: hidden; }
@@ -1097,7 +1100,14 @@ function renderCalendar(data, mode) {
             ? (c.status === 'disponible' ? `onclick="selectDay('${c.date}')"` : '')
             : `onclick="selectAdminDate('${c.date}')"`;
           let badge = '';
-          if (c.status === 'disponible') badge = `<span class="badge ok">${c.restant}/${c.max}</span>`;
+          // Visiteur : places LIBRES (« 2 places ») ; admin : rendez-vous PRIS (« 1/3 pris »).
+          // Version courte (chiffre seul) quand la case est étroite, voir CSS @container.
+          if (c.status === 'disponible') {
+            const pris = c.max - c.restant;
+            badge = mode === 'admin'
+              ? `<span class="badge ok"><span class="b-long">${pris}/${c.max} pris</span><span class="b-num">${pris}/${c.max}</span></span>`
+              : `<span class="badge ok ${c.restant === 1 ? 'last' : ''}"><span class="b-long">${c.restant} place${c.restant > 1 ? 's' : ''}</span><span class="b-num">${c.restant}</span></span>`;
+          }
           // Mot complet si la case est assez large, sinon petite barre de couleur (voir CSS @container)
           if (c.status === 'complet') badge = `<span class="badge full"><span class="b-long">Complet</span><span class="b-short"></span></span>`;
           if (c.status === 'ferme') badge = `<span class="badge off"><span class="b-long">Fermé</span><span class="b-short"></span></span>`;
@@ -1120,7 +1130,7 @@ function renderCalendar(data, mode) {
       </div>
       ${mode === 'client' ? `
       <div class="status-explain">
-        <div class="se-row"><span class="se-dot" style="background:var(--accent)"></span><span><b>Disponible</b> — il reste de la place, le chiffre indiqué (ex. "2/3") montre combien de créneaux sont encore libres sur le maximum autorisé ce jour-là. Cliquez dessus pour réserver.</span></div>
+        <div class="se-row"><span class="se-dot" style="background:var(--accent)"></span><span><b>Disponible</b> — il reste de la place : le nombre affiché (ex. « 2 places ») est le nombre de demandes encore possibles ce jour-là. Il diminue à chaque demande envoyée. Cliquez sur le jour pour réserver.</span></div>
         <div class="se-row"><span class="se-dot" style="background:var(--danger)"></span><span><b>Complet</b> — le nombre maximum de rendez-vous accepté pour cette journée a déjà été atteint. Vous ne pouvez plus réserver ce jour, choisissez une autre date.</span></div>
         <div class="se-row"><span class="se-dot" style="background:var(--closed)"></span><span><b>Fermé</b> — ce jour n'est pas ouvert à la réservation (jour de fermeture habituel ou période bloquée par le responsable).</span></div>
       </div>` : ''}
