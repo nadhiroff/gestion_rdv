@@ -14,7 +14,8 @@ notifications email automatiques (Nodemailer), base de données MySQL, à déplo
 ### 1. Le principe
 
 1. Le visiteur choisit un **jour disponible** dans le calendrier et remplit un formulaire
-   (nom, prénom, téléphone, email).
+   (nom, prénom, téléphone, email). Pour le téléphone, il choisit l'**indicatif de son pays**
+   dans une liste de 207 pays (**Bénin +229 présélectionné**) puis tape son numéro local.
 2. Il envoie une **demande**. Ce n'est pas encore un rendez-vous confirmé.
 3. Le responsable reçoit un email, puis **accepte** ou **refuse** la demande depuis l'espace
    d'administration.

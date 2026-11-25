@@ -423,6 +423,11 @@
   .act-bar-label b { color: var(--ink); font-weight: 600; }
   .act-bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
   .act-bar > div { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-light)); }
+  /* Téléphone : indicatif du pays + numéro */
+  .tel-group { display: flex; gap: 8px; min-width: 0; }
+  .tel-group select { flex: 0 0 190px; min-width: 0; max-width: 190px; text-overflow: ellipsis; }
+  @media (max-width: 420px) { .tel-group select { flex-basis: 150px; max-width: 150px; } }
+  .tel-group input { flex: 1 1 auto; min-width: 0; }
   .legal-box { max-width: 680px; }
   .legal-body { max-height: min(70vh, 640px); overflow-y: auto; font-size: 0.88rem; line-height: 1.6; color: var(--ink); }
   .legal-body h4 { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; margin: 18px 0 6px; color: var(--accent-dark); }
@@ -539,7 +544,7 @@ const state = {
   selectedDate: null,
   showBookingModal: false,
   confirmed: null,
-  form: { nom: '', prenom: '', tel: '', email: '' },
+  form: { nom: '', prenom: '', tel: '', telCc: 'BJ', email: '' },
   formError: '',
   submitting: false,
   adminToken: localStorage.getItem('rdv_admin_token') || null,
@@ -696,7 +701,7 @@ function selectDay(iso) {
   state.showBookingModal = true;
   state.confirmed = null;
   state.formError = '';
-  state.form = { nom: '', prenom: '', tel: '', email: '' };
+  state.form = { nom: '', prenom: '', tel: '', telCc: 'BJ', email: '' };
   render();
 }
 function closeBookingModal() {
@@ -704,8 +709,9 @@ function closeBookingModal() {
   render();
 }
 async function submitBooking() {
-  const { nom, prenom, tel, email } = state.form;
-  if (!nom || !prenom || !tel || !email) { state.formError = 'Merci de remplir tous les champs.'; render(); return; }
+  const { nom, prenom, email } = state.form;
+  if (!nom || !prenom || !state.form.tel || !email) { state.formError = 'Merci de remplir tous les champs.'; render(); return; }
+  const tel = fullPhone(state.form.telCc || 'BJ', state.form.tel);
   state.submitting = true; render();
   try {
     const booking = await api('/bookings', { method: 'POST', body: JSON.stringify({ date: state.selectedDate, nom, prenom, tel, email }) });
@@ -1381,9 +1387,14 @@ function renderBookingModal() {
             <div class="field"><label>Nom</label><input id="f-nom" value="${esc(state.form.nom)}" placeholder="Diallo" /></div>
             <div class="field"><label>Prénom</label><input id="f-prenom" value="${esc(state.form.prenom)}" placeholder="Aminata" /></div>
           </div>
-          <div class="row2">
-            <div class="field"><label>Téléphone</label><input id="f-tel" value="${esc(state.form.tel)}" placeholder="+229 00 00 00 00" /></div>
-            <div class="field"><label>Email</label><input id="f-email" type="email" value="${esc(state.form.email)}" placeholder="vous@email.com" /></div>
+          <div>
+            <div class="field"><label for="f-tel">Téléphone</label>
+              <div class="tel-group">
+                <select id="f-tel-cc" aria-label="Indicatif du pays">${countryOptions(state.form.telCc || 'BJ')}</select>
+                <input id="f-tel" type="tel" inputmode="tel" autocomplete="tel-national" value="${esc(state.form.tel)}" placeholder="${(state.form.telCc || 'BJ') === 'BJ' ? '01 62 00 00 62' : 'Numéro'}" />
+              </div>
+            </div>
+            <div class="field"><label>Email</label><input id="f-email" type="email" autocomplete="email" value="${esc(state.form.email)}" placeholder="vous@email.com" /></div>
           </div>
           ${state.formError ? `<div class="msg error">${ic('ban',15)}${state.formError}</div>` : ''}
           <button class="btn btn-primary btn-block" style="margin-top:8px" onclick="submitBooking()" ${state.submitting ? 'disabled' : ''}>
@@ -1869,6 +1880,12 @@ function attachFormListeners() {
     if (el) el.addEventListener('input', () => { state.form[key] = el.value; });
   };
   bind('f-nom', 'nom'); bind('f-prenom', 'prenom'); bind('f-tel', 'tel'); bind('f-email', 'email');
+  const cc = document.getElementById('f-tel-cc');
+  if (cc) cc.addEventListener('change', () => {
+    state.form.telCc = cc.value;
+    const t = document.getElementById('f-tel');
+    if (t) { t.placeholder = cc.value === 'BJ' ? '01 62 00 00 62' : 'Numéro'; t.focus(); }
+  });
   document.addEventListener('keydown', escHandler);
 }
 /* ===================== Page « Annuler mon rendez-vous » (lien reçu par email) ===================== */
@@ -2005,6 +2022,234 @@ function renderLegalModal() {
 function escHandler(e) {
   if (e.key === 'Escape' && state.legalModal) return closeLegal();
   if (e.key === 'Escape' && state.showBookingModal) closeBookingModal();
+}
+
+/* ===================== Indicatifs téléphoniques (formulaire de réservation) ===================== */
+// "ISO|indicatif|nom" — le Bénin est présélectionné ; pays proches et fréquents en tête de liste
+const COUNTRY_DATA = `
+AF|93|Afghanistan
+ZA|27|Afrique du Sud
+AL|355|Albanie
+DZ|213|Algérie
+DE|49|Allemagne
+AD|376|Andorre
+AO|244|Angola
+AG|1|Antigua-et-Barbuda
+SA|966|Arabie saoudite
+AR|54|Argentine
+AM|374|Arménie
+AU|61|Australie
+AT|43|Autriche
+AZ|994|Azerbaïdjan
+BS|1|Bahamas
+BH|973|Bahreïn
+BD|880|Bangladesh
+BB|1|Barbade
+BE|32|Belgique
+BZ|501|Belize
+BJ|229|Bénin
+BT|975|Bhoutan
+BY|375|Biélorussie
+BO|591|Bolivie
+BA|387|Bosnie-Herzégovine
+BW|267|Botswana
+BR|55|Brésil
+BN|673|Brunei
+BG|359|Bulgarie
+BF|226|Burkina Faso
+BI|257|Burundi
+KH|855|Cambodge
+CM|237|Cameroun
+CA|1|Canada
+CV|238|Cap-Vert
+CL|56|Chili
+CN|86|Chine
+CY|357|Chypre
+CO|57|Colombie
+KM|269|Comores
+CG|242|Congo
+CD|243|Congo (RDC)
+KR|82|Corée du Sud
+KP|850|Corée du Nord
+CR|506|Costa Rica
+CI|225|Côte d’Ivoire
+HR|385|Croatie
+CU|53|Cuba
+DK|45|Danemark
+DJ|253|Djibouti
+DM|1|Dominique
+EG|20|Égypte
+AE|971|Émirats arabes unis
+EC|593|Équateur
+ER|291|Érythrée
+ES|34|Espagne
+EE|372|Estonie
+SZ|268|Eswatini
+US|1|États-Unis
+ET|251|Éthiopie
+FJ|679|Fidji
+FI|358|Finlande
+FR|33|France
+GA|241|Gabon
+GM|220|Gambie
+GE|995|Géorgie
+GH|233|Ghana
+GR|30|Grèce
+GD|1|Grenade
+GT|502|Guatemala
+GN|224|Guinée
+GQ|240|Guinée équatoriale
+GW|245|Guinée-Bissau
+GY|592|Guyana
+GF|594|Guyane française
+HT|509|Haïti
+HN|504|Honduras
+HK|852|Hong Kong
+HU|36|Hongrie
+IN|91|Inde
+ID|62|Indonésie
+IQ|964|Irak
+IR|98|Iran
+IE|353|Irlande
+IS|354|Islande
+IL|972|Israël
+IT|39|Italie
+JM|1|Jamaïque
+JP|81|Japon
+JO|962|Jordanie
+KZ|7|Kazakhstan
+KE|254|Kenya
+KG|996|Kirghizistan
+KI|686|Kiribati
+XK|383|Kosovo
+KW|965|Koweït
+LA|856|Laos
+LS|266|Lesotho
+LV|371|Lettonie
+LB|961|Liban
+LR|231|Liberia
+LY|218|Libye
+LI|423|Liechtenstein
+LT|370|Lituanie
+LU|352|Luxembourg
+MO|853|Macao
+MK|389|Macédoine du Nord
+MG|261|Madagascar
+MY|60|Malaisie
+MW|265|Malawi
+MV|960|Maldives
+ML|223|Mali
+MT|356|Malte
+MA|212|Maroc
+MH|692|Marshall
+MU|230|Maurice
+MR|222|Mauritanie
+YT|262|Mayotte
+MX|52|Mexique
+FM|691|Micronésie
+MD|373|Moldavie
+MC|377|Monaco
+MN|976|Mongolie
+ME|382|Monténégro
+MZ|258|Mozambique
+MM|95|Myanmar
+NA|264|Namibie
+NR|674|Nauru
+NP|977|Népal
+NI|505|Nicaragua
+NE|227|Niger
+NG|234|Nigeria
+NO|47|Norvège
+NC|687|Nouvelle-Calédonie
+NZ|64|Nouvelle-Zélande
+OM|968|Oman
+UG|256|Ouganda
+UZ|998|Ouzbékistan
+PK|92|Pakistan
+PW|680|Palaos
+PS|970|Palestine
+PA|507|Panama
+PG|675|Papouasie-Nouvelle-Guinée
+PY|595|Paraguay
+NL|31|Pays-Bas
+PE|51|Pérou
+PH|63|Philippines
+PL|48|Pologne
+PF|689|Polynésie française
+PR|1|Porto Rico
+PT|351|Portugal
+QA|974|Qatar
+CF|236|République centrafricaine
+DO|1|République dominicaine
+CZ|420|République tchèque
+RE|262|La Réunion
+RO|40|Roumanie
+GB|44|Royaume-Uni
+RU|7|Russie
+RW|250|Rwanda
+KN|1|Saint-Christophe-et-Niévès
+LC|1|Sainte-Lucie
+SM|378|Saint-Marin
+VC|1|Saint-Vincent-et-les-Grenadines
+SB|677|Salomon
+SV|503|Salvador
+WS|685|Samoa
+ST|239|Sao Tomé-et-Principe
+SN|221|Sénégal
+RS|381|Serbie
+SC|248|Seychelles
+SL|232|Sierra Leone
+SG|65|Singapour
+SK|421|Slovaquie
+SI|386|Slovénie
+SO|252|Somalie
+SD|249|Soudan
+SS|211|Soudan du Sud
+LK|94|Sri Lanka
+SE|46|Suède
+CH|41|Suisse
+SR|597|Suriname
+SY|963|Syrie
+TJ|992|Tadjikistan
+TW|886|Taïwan
+TZ|255|Tanzanie
+TD|235|Tchad
+TH|66|Thaïlande
+TL|670|Timor oriental
+TG|228|Togo
+TO|676|Tonga
+TT|1|Trinité-et-Tobago
+TN|216|Tunisie
+TM|993|Turkménistan
+TR|90|Turquie
+TV|688|Tuvalu
+UA|380|Ukraine
+UY|598|Uruguay
+VU|678|Vanuatu
+VA|39|Vatican
+VE|58|Venezuela
+VN|84|Viêt Nam
+YE|967|Yémen
+ZM|260|Zambie
+ZW|263|Zimbabwe
+GP|590|Guadeloupe
+MQ|596|Martinique
+`.trim().split('\n').map(l => { const [iso, dial, name] = l.split('|'); return { iso, dial, name }; });
+const COUNTRY_TOP = ['BJ', 'TG', 'NG', 'NE', 'BF', 'CI', 'GH', 'SN', 'ML', 'CM', 'FR', 'KM'];
+const flagOf = iso => String.fromCodePoint(...[...iso].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+function countryOptions(selected) {
+  const byIso = Object.fromEntries(COUNTRY_DATA.map(c => [c.iso, c]));
+  const opt = c => `<option value="${c.iso}" ${c.iso === selected ? 'selected' : ''}>${flagOf(c.iso)} +${c.dial} ${c.name}</option>`; // indicatif en premier : reste lisible même tronqué
+  const top = COUNTRY_TOP.map(i => byIso[i]).filter(Boolean);
+  const rest = COUNTRY_DATA.filter(c => !COUNTRY_TOP.includes(c.iso)).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  return `<optgroup label="Afrique de l’Ouest et fréquents">${top.map(opt).join('')}</optgroup><optgroup label="Tous les pays">${rest.map(opt).join('')}</optgroup>`;
+}
+// Numéro complet envoyé au serveur : « +229 0162000062 ». Si le visiteur a déjà tapé « +… », on le garde tel quel.
+function fullPhone(iso, tel) {
+  const t = String(tel || '').trim();
+  if (t.startsWith('+') || t.startsWith('00')) return t.replace(/^00/, '+');
+  const c = COUNTRY_DATA.find(x => x.iso === iso) || { dial: '229' };
+  return `+${c.dial} ${t}`;
 }
 
 /* ===================== Mise à jour automatique (sans actualiser la page) ===================== */
