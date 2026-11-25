@@ -7,14 +7,8 @@ services:
     environment:
       PORT: "4000"
       FRONTEND_ORIGIN: "*"
-      # Une seule variable suffit : l'URL interne MySQL copiée depuis Coolify.
-      # (Les DB_* séparées restent possibles, DATABASE_URL est prioritaire.)
-      DATABASE_URL: ${DATABASE_URL:-}
-      DB_HOST: ${DB_HOST:-}
-      DB_PORT: ${DB_PORT:-3306}
-      DB_USER: ${DB_USER:-}
-      DB_PASSWORD: ${DB_PASSWORD:-}
-      DB_NAME: ${DB_NAME:-}
+      # Base MySQL : l'URL interne copiée depuis la fiche de la base Coolify
+      DATABASE_URL: ${DATABASE_URL}
       ADMIN_CODE: ${ADMIN_CODE}
       JWT_SECRET: ${JWT_SECRET}
       SMTP_HOST: ${SMTP_HOST}

@@ -25,18 +25,8 @@ DATABASE_URL=mysql://utilisateur:mot_de_passe@nom-du-conteneur:3306/nom_de_la_ba
 > Cette URL contient le mot de passe : elle se met **uniquement** dans Coolify, jamais dans un
 > fichier du dépôt.
 
-<details>
-<summary>Alternative : variables séparées (utilisées seulement si <code>DATABASE_URL</code> est vide)</summary>
-
-| Variable | Champ dans la fiche de la base Coolify |
-|---|---|
-| `DB_HOST` | nom du conteneur MySQL (dans l'URL interne, entre `@` et `:3306`) |
-| `DB_USER` | Normal user |
-| `DB_PASSWORD` | Normal user password |
-| `DB_NAME` | Initial database |
-| `DB_PORT` | `3306` (ou laisser vide : la valeur par défaut est 3306) |
-
-</details>
+> En local (sans Docker), `backend/.env` peut toujours utiliser `DB_HOST`, `DB_USER`,
+> `DB_PASSWORD`, `DB_NAME` séparément : voir `backend/.env.example`.
 
 ## 2. L'application
 
