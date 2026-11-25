@@ -305,6 +305,7 @@
   .hint .ic { flex: none; margin-top: 2px; }
   .hint a { color: var(--accent); font-weight: 600; }
   .nav-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--danger); color: #fff; font-size: 0.72rem; font-weight: 700; display: inline-grid; place-items: center; }
+  .nav-count[hidden] { display: none; } /* pastille masquée quand il n'y a rien en attente */
   .recap { margin-top: 16px; padding: 14px 16px; background: var(--surface-tint); border: 1px solid var(--line); border-radius: var(--radius-sm); }
   .recap-title { font-size: 0.72rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
   .recap-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 0.85rem; border-top: 1px dashed var(--line); }
@@ -361,8 +362,9 @@
 
   .table-wrap { overflow-x: auto; border-radius: var(--radius-sm); }
   table.ledger { width: 100%; border-collapse: collapse; min-width: 660px; }
-  table.ledger th { text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); padding: 10px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; font-weight: 700; }
-  table.ledger td { padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 0.85rem; white-space: nowrap; }
+  /* En-têtes et données centrés, chaque donnée sous son en-tête */
+  table.ledger th { text-align: center; vertical-align: middle; font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-faint); padding: 10px 12px; border-bottom: 2px solid var(--line); white-space: nowrap; font-weight: 700; }
+  table.ledger td { text-align: center; vertical-align: middle; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 0.85rem; white-space: nowrap; }
   table.ledger tbody tr { transition: background .12s; }
   table.ledger tbody tr:hover { background: var(--surface-tint); }
   .status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
@@ -371,7 +373,7 @@
   .status-pill.rejected { background: var(--danger-soft); color: var(--danger); }
   .slot-panel { margin-bottom: 18px; border: 2px solid var(--accent); background: var(--accent-soft); scroll-margin: 90px; }
   .status-pill.cancelled { background: var(--closed-soft); color: #5B6476; }
-  .row-actions { display: flex; gap: 6px; }
+  .row-actions { display: flex; gap: 6px; justify-content: center; align-items: center; }
 
   .empty-state { border: 1.5px dashed var(--line); border-radius: var(--radius-sm); padding: 30px; text-align: center; color: var(--ink-soft); font-size: 0.88rem; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .empty-state svg { color: var(--ink-faint); }
@@ -657,7 +659,8 @@ async function api(path, opts = {}) {
 async function loadMonth() {
   try {
     state.monthData = await api(`/public/month?year=${state.cursor.year}&month=${state.cursor.month}`);
-    state.blockedDates = await api('/public/blocked-dates');
+    // Côté admin, state.blockedDates vient de /admin/blocked-dates (avec les motifs) : ne pas l'écraser
+    if (state.view !== 'admin' || !state.adminToken) state.blockedDates = await api('/public/blocked-dates');
   } catch (e) { showToast('error', e.message); }
   render();
 }
@@ -1168,6 +1171,7 @@ function render() {
   `;
   attachFormListeners();
   if (state.slotForm.bookingId && document.getElementById('slot-form-container')) renderSlotForm(); // garde le formulaire ouvert
+  updatePendingIndicators();
   renderToast();
 }
 
@@ -1398,7 +1402,7 @@ function renderAdmin() {
     : (state.filters.from || state.filters.to) ? `${state.filters.from ? fmtDateShort(state.filters.from) : '…'} → ${state.filters.to ? fmtDateShort(state.filters.to) : '…'}`
     : 'Toutes les dates';
 
-  const navBtn = (id, icon, label, count) => `<button class="${section === id ? 'active' : ''}" onclick="setAdminSection('${id}')">${ic(icon, 16)} ${label}${count ? `<span class="nav-count">${count}</span>` : ''}</button>`;
+  const navBtn = (id, icon, label, count) => `<button class="${section === id ? 'active' : ''}" onclick="setAdminSection('${id}')">${ic(icon, 16)} ${label}<span class="nav-count" ${id === 'rdv' ? 'data-pending-badge' : ''} ${count ? '' : 'hidden'}>${count || ''}</span></button>`;
   const guide = (title, steps) => `
     <div class="guide">
       <h4>${ic('info', 16)} ${title}</h4>
@@ -1426,7 +1430,7 @@ function renderAdmin() {
         ${state.bookings.length === 0 ? `<div class="empty-state">${ic('users',26)}<span>Aucun rendez-vous pour ces critères.</span></div>` : `
         <div class="table-wrap">
           <table class="ledger">
-            <thead><tr><th>Date</th><th>Créneau</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Créneau</th><th>Client</th><th>Téléphone</th><th>Email</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
               ${state.bookings.map(b => `
                 <tr>
@@ -1978,6 +1982,65 @@ function escHandler(e) {
   if (e.key === 'Escape' && state.legalModal) return closeLegal();
   if (e.key === 'Escape' && state.showBookingModal) closeBookingModal();
 }
+
+/* ===================== Mise à jour automatique (sans actualiser la page) ===================== */
+// Admin : toutes les 20 s (et dès qu'on revient sur l'onglet), on récupère demandes, compteurs et calendrier.
+// On ne redessine que si quelque chose a changé, et jamais pendant une saisie (pour ne rien effacer).
+const POLL_MS = 20000;
+let lastAdminSig = '', renderPending = false;
+const isTyping = () => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || '');
+function safeRender() {
+  if (isTyping()) { renderPending = true; return; }
+  renderPending = false;
+  render();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (renderPending && !isTyping()) safeRender(); }, 0));
+function updatePendingIndicators() {
+  const n = (state.stats && state.stats.en_attente) || 0;
+  document.querySelectorAll('[data-pending-badge]').forEach(el => { el.textContent = n || ''; el.hidden = !n; });
+  document.title = state.view === 'admin' && state.adminToken
+    ? `${n ? '(' + n + ') ' : ''}Admin — Prise de rendez-vous`
+    : 'Prise de rendez-vous';
+}
+async function pollAdmin() {
+  if (state.view !== 'admin' || !state.adminToken || !state.adminSettings || document.hidden) return;
+  const { date, from, to, status } = state.filters;
+  const params = new URLSearchParams();
+  if (date) params.set('date', date);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (status) params.set('status', status);
+  try {
+    const [bookings, stats, month] = await Promise.all([
+      api('/admin/bookings?' + params.toString()),
+      api('/admin/stats'),
+      api(`/public/month?year=${state.cursor.year}&month=${state.cursor.month}`),
+    ]);
+    const sig = JSON.stringify([bookings, stats, month]);
+    if (sig === lastAdminSig) return; // rien de nouveau : on ne touche pas à la page
+    const before = state.stats ? state.stats.en_attente : null;
+    lastAdminSig = sig;
+    state.bookings = bookings; state.stats = stats; state.monthData = month;
+    if (before !== null && stats.en_attente > before) {
+      const k = stats.en_attente - before;
+      showToast('success', `${k} nouvelle${k > 1 ? 's' : ''} demande${k > 1 ? 's' : ''} de rendez-vous`);
+    }
+    updatePendingIndicators();
+    // Rubriques Réglages / Congés : leurs formulaires ne dépendent pas des demandes -> pas de redessin
+    if (state.adminSection === 'rdv') safeRender();
+  } catch (e) { /* silencieux : on réessaiera au prochain passage */ }
+}
+// Visiteur : le calendrier se remet à jour (places restantes) quand il revient sur la page, ou chaque minute
+async function pollClient() {
+  if (state.view !== 'client' || document.hidden || state.showBookingModal || state.legalModal) return;
+  try {
+    const month = await api(`/public/month?year=${state.cursor.year}&month=${state.cursor.month}`);
+    if (JSON.stringify(month) !== JSON.stringify(state.monthData)) { state.monthData = month; safeRender(); }
+  } catch (e) { /* silencieux */ }
+}
+setInterval(pollAdmin, POLL_MS);
+setInterval(pollClient, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollAdmin(); pollClient(); } });
 
 /* ===================== Init ===================== */
 render();
