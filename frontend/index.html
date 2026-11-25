@@ -854,6 +854,13 @@ function slotLabel(b) {
   const r = state.responsables.find(x => x.id === b.responsable_id);
   return `<b>${debut}–${fin}</b>${r ? `<br><span style="color:var(--ink-soft);font-size:.8rem">${esc(r.nom)}</span>` : ''}`;
 }
+// Fiche « responsable » correspondant au responsable général des Réglages (même email, sinon même nom)
+function isGeneralResponsable(r) {
+  const g = state.adminSettings || {};
+  if (!r) return false;
+  if (g.responsable_email && r.email) return r.email.toLowerCase() === g.responsable_email.toLowerCase();
+  return !!g.responsable_nom && r.nom === g.responsable_nom;
+}
 async function setBookingStatus(id, status) {
   if (status === 'accepted') {
     // Ouvrir le formulaire de sélection de créneau
@@ -875,11 +882,11 @@ async function setBookingStatus(id, status) {
       }
     }
     // Pas de règle spéciale ce jour-là : on propose le responsable général (modifiable)
+    // Sans règle spéciale : « Responsable général » (valeur vide, le serveur l'attribue).
+    // Une demande rétablie garde son responsable, sauf si c'était le responsable général.
     let defaultResponsableId = autoResponsableId;
-    if (!defaultResponsableId && state.adminSettings) {
-      const g = state.responsables.find(r => state.adminSettings.responsable_email && r.email === state.adminSettings.responsable_email)
-        || state.responsables.find(r => r.nom === state.adminSettings.responsable_nom);
-      if (g) defaultResponsableId = g.id;
+    if (!defaultResponsableId && booking.responsable_id && !isGeneralResponsable(state.responsables.find(r => r.id === booking.responsable_id))) {
+      defaultResponsableId = booking.responsable_id;
     }
     
     state.slotForm = {
@@ -988,7 +995,7 @@ function renderSlotForm() {
         <div class="field"><label>Responsable ${f.autoDetected ? '(fixé par la règle spéciale de ce jour)' : ''}</label>
           <select id="slot-responsable" ${f.autoDetected ? 'disabled' : ''} onchange="state.slotForm.responsable_id = this.value">
             ${f.autoDetected ? '' : `<option value="">Responsable général${g.responsable_nom ? ' (' + esc(g.responsable_nom) + ')' : ''}</option>`}
-            ${state.responsables.map(r => `<option value="${r.id}" ${f.responsable_id == r.id ? 'selected' : ''}>${esc(r.nom)}${r.email ? ' (' + esc(r.email) + ')' : ''}</option>`).join('')}
+            ${state.responsables.filter(r => f.autoDetected || !isGeneralResponsable(r)).map(r => `<option value="${r.id}" ${f.responsable_id == r.id ? 'selected' : ''}>${esc(r.nom)}${r.email ? ' (' + esc(r.email) + ')' : ''}</option>`).join('')}
           </select>
           <p class="hint" style="margin-top:6px">${ic('info',14)}<span>Deux rendez-vous qui se chevauchent pour le même responsable sont refusés automatiquement.</span></p>
         </div>
