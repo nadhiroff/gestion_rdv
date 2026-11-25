@@ -429,6 +429,10 @@
   .tel-group select { flex: 0 0 190px; min-width: 0; max-width: 190px; text-overflow: ellipsis; }
   @media (max-width: 420px) { .tel-group select { flex-basis: 150px; max-width: 150px; } }
   .tel-group input { flex: 1 1 auto; min-width: 0; }
+  /* Durée « Autre » : nombre + choix de l'unité (min / h) */
+  .duree-autre { display: flex; gap: 8px; }
+  .duree-autre input { flex: 1 1 auto; min-width: 0; }
+  .duree-autre select { flex: 0 0 84px; }
   /* Champ numérique suivi de son unité (« 50 min ») */
   .input-suffix { position: relative; }
   .input-suffix input { padding-right: 52px; }
@@ -930,10 +934,16 @@ async function submitSlotForm() {
   // Récupérer les valeurs depuis le formulaire DOM
   const heure_debut = document.getElementById('slot-heure')?.value || '';
   const choix = document.getElementById('slot-duree')?.value || '';
-  const duree = choix === 'autre' ? (document.getElementById('slot-duree-autre')?.value || '').trim() : choix;
-  if (choix === 'autre' && !(Number.isInteger(Number(duree)) && Number(duree) >= 5 && Number(duree) <= 480)) {
-    showToast('error', 'Durée « Autre » : indiquez un nombre de minutes entre 5 et 480.');
-    return;
+  let duree = choix;
+  if (choix === 'autre') {
+    // « 1,5 » ou « 1.5 » en heures -> 90 minutes
+    const brut = Number(String(document.getElementById('slot-duree-autre')?.value || '').trim().replace(',', '.'));
+    const unite = document.getElementById('slot-duree-unite')?.value || 'min';
+    duree = String(Math.round(unite === 'h' ? brut * 60 : brut));
+    if (!(brut > 0) || Number(duree) < 5 || Number(duree) > 480) {
+      showToast('error', 'Durée « Autre » : entre 5 min et 8 h.');
+      return;
+    }
   }
   
   // Si le responsable est détecté automatiquement, utiliser la valeur du champ caché
@@ -1003,9 +1013,12 @@ function renderSlotForm() {
               <option value="autre" ${f.duree === 'autre' ? 'selected' : ''}>Autre…</option>
             </select>
             ${f.duree === 'autre' ? `
-            <div class="input-suffix" style="margin-top:8px">
-              <input id="slot-duree-autre" type="number" inputmode="numeric" min="5" max="480" step="5" placeholder="Ex : 50" value="${esc(f.dureeAutre || '')}" oninput="state.slotForm.dureeAutre = this.value" aria-label="Durée en minutes" />
-              <span>min</span>
+            <div class="duree-autre" style="margin-top:8px">
+              <input id="slot-duree-autre" type="number" inputmode="decimal" min="${f.dureeUnite === 'h' ? 0.25 : 5}" max="${f.dureeUnite === 'h' ? 8 : 480}" step="${f.dureeUnite === 'h' ? 0.25 : 5}" placeholder="${f.dureeUnite === 'h' ? 'Ex : 1,5' : 'Ex : 50'}" value="${esc(f.dureeAutre || '')}" oninput="state.slotForm.dureeAutre = this.value" aria-label="Durée" />
+              <select id="slot-duree-unite" aria-label="Unité" onchange="state.slotForm.dureeUnite = this.value; renderSlotForm(); document.getElementById('slot-duree-autre')?.focus();">
+                <option value="min" ${f.dureeUnite !== 'h' ? 'selected' : ''}>min</option>
+                <option value="h" ${f.dureeUnite === 'h' ? 'selected' : ''}>h</option>
+              </select>
             </div>` : ''}
           </div>
         </div>
