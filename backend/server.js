@@ -878,8 +878,8 @@ app.get('/api/admin/blocked-dates', asyncHandler(async (req, res) => {
 
 //_route publique pour les périodes bloquées (affichage client)
 app.get('/api/public/blocked-dates', asyncHandler(async (req, res) => {
-  // Seulement les dates : le motif est une note interne, visible uniquement dans l'admin
-  const [rows] = await pool.query('SELECT id, date_debut, date_fin FROM blocked_dates ORDER BY date_debut ASC');
+  // Dates + motif (affiché aux visiteurs dans le bandeau « Période bloquée » ; motif vide = rien d'affiché)
+  const [rows] = await pool.query('SELECT id, date_debut, date_fin, motif FROM blocked_dates ORDER BY date_debut ASC');
   res.json(rows);
 }));
 

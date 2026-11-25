@@ -781,6 +781,7 @@ async function loadAdminData() {
     state.blockedDates = blocked;
     state.dateOverrides = overrides;
     state.responsables = responsables;
+    rememberAdminServerData(settings, blocked, overrides);
     await loadBookings();
     if (state.focusBookingId) await focusBooking(state.focusBookingId);
   } catch (e) { showToast('error', e.message); render(); }
@@ -1368,7 +1369,7 @@ function renderClient() {
             </div>` : ''}
             ${b.motif ? `
             <div class="blocked-alert-item">
-              <strong>Motif :</strong> ${b.motif}
+              <strong>Motif :</strong> ${esc(b.motif)}
             </div>` : ''}
           </div>
         </div>
@@ -1621,7 +1622,7 @@ function renderAdmin() {
           <div class="field"><label>Date de fin (optionnel)</label><input id="b-fin" type="date" value="${state.newBlock.date_fin}" /></div>
         </div>
         <div class="field"><label>Motif (optionnel)</label><input id="b-motif" value="${esc(state.newBlock.motif)}" placeholder="Congés, formation, jour férié..." /></div>
-        <p class="hint">${ic('info',14)} Le motif est visible uniquement par vous, dans la liste ci-dessous et dans le détail du jour.</p>
+        <p class="hint">${ic('info',14)}<span>Le motif (ex. « Congés ») est <b>affiché aux visiteurs</b> dans le bandeau « Période bloquée ». Laissez-le vide pour ne rien afficher.</span></p>
         <div class="panel-foot">
           <button class="btn btn-primary btn-sm" onclick="submitBlockedDate()">${state.newBlock.id ? ic('check',15) + ' Mettre à jour' : ic('plus',15) + ' Bloquer'}</button>
           ${state.newBlock.id ? `<button class="btn btn-ghost btn-sm" onclick="cancelEditBlock()">Annuler</button>` : ''}
@@ -2318,13 +2319,32 @@ function fullPhone(iso, tel) {
 /* ===================== Mise à jour automatique (sans actualiser la page) ===================== */
 // Admin : toutes les 20 s (et dès qu'on revient sur l'onglet), on récupère demandes, compteurs et calendrier.
 // On ne redessine que si quelque chose a changé, et jamais pendant une saisie (pour ne rien effacer).
-const POLL_MS = 20000;
+const POLL_MS = 15000;
 let lastAdminSig = '', renderPending = false;
+// Dernière version reçue du serveur pour chaque donnée de l'admin : on ne remplace la version locale
+// que si le SERVEUR a changé (ex. modification depuis un autre onglet / appareil), jamais à cause
+// d'une modification locale pas encore enregistrée (ex. jour coché dans « Jours fermés »).
+const lastServer = { settings: '', blocked: '', overrides: '' };
 const isTyping = () => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName || '');
-function safeRender() {
-  if (isTyping()) { renderPending = true; return; }
-  renderPending = false;
+// Redessine la page en gardant tout ce que l'utilisateur a tapé/choisi sans l'avoir encore enregistré
+function renderKeepingEdits() {
+  const edits = {};
+  document.querySelectorAll('#app input[id], #app select[id], #app textarea[id]').forEach(el => {
+    if (el.type === 'checkbox' || el.type === 'radio') { if (el.checked !== el.defaultChecked) edits[el.id] = { checked: el.checked }; }
+    else if (el.tagName === 'SELECT') { const d = [...el.options].find(o => o.defaultSelected); if (d && el.value !== d.value) edits[el.id] = { value: el.value }; }
+    else if (el.value !== el.defaultValue) edits[el.id] = { value: el.value };
+  });
   render();
+  for (const [id, v] of Object.entries(edits)) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if ('checked' in v) el.checked = v.checked; else el.value = v.value;
+  }
+}
+function safeRender() {
+  if (isTyping()) { renderPending = true; return; } // on attend la fin de la saisie
+  renderPending = false;
+  renderKeepingEdits();
 }
 document.addEventListener('focusout', () => setTimeout(() => { if (renderPending && !isTyping()) safeRender(); }, 0));
 function updatePendingIndicators() {
@@ -2333,6 +2353,11 @@ function updatePendingIndicators() {
   document.title = state.view === 'admin' && state.adminToken
     ? `${n ? '(' + n + ') ' : ''}Admin — Prise de rendez-vous`
     : 'Prise de rendez-vous';
+}
+function rememberAdminServerData(settings, blocked, overrides) {
+  lastServer.settings = JSON.stringify(settings);
+  lastServer.blocked = JSON.stringify(blocked);
+  lastServer.overrides = JSON.stringify(overrides);
 }
 async function pollAdmin() {
   if (state.view !== 'admin' || !state.adminToken || !state.adminSettings || document.hidden) return;
@@ -2343,13 +2368,24 @@ async function pollAdmin() {
   if (to) params.set('to', to);
   if (status) params.set('status', status);
   try {
-    const [bookings, stats, month] = await Promise.all([
+    const [bookings, stats, month, settings, blocked, overrides] = await Promise.all([
       api('/admin/bookings?' + params.toString()),
       api('/admin/stats'),
       api(`/public/month?year=${state.cursor.year}&month=${state.cursor.month}`),
+      api('/admin/settings'),
+      api('/admin/blocked-dates'),
+      api('/admin/date-overrides'),
     ]);
+    // Réglages / congés / règles spéciales modifiés AILLEURS (autre onglet, téléphone du DG…)
+    let configChanged = false;
+    const sS = JSON.stringify(settings), sB = JSON.stringify(blocked), sO = JSON.stringify(overrides);
+    if (sS !== lastServer.settings) { state.adminSettings = settings; lastServer.settings = sS; configChanged = true; }
+    if (sB !== lastServer.blocked) { state.blockedDates = blocked; lastServer.blocked = sB; configChanged = true; }
+    if (sO !== lastServer.overrides) { state.dateOverrides = overrides; lastServer.overrides = sO; configChanged = true; }
+
     const sig = JSON.stringify([bookings, stats, month]);
-    if (sig === lastAdminSig) return; // rien de nouveau : on ne touche pas à la page
+    const dataChanged = sig !== lastAdminSig;
+    if (!dataChanged && !configChanged) return; // rien de nouveau : on ne touche pas à la page
     const before = state.stats ? state.stats.en_attente : null;
     lastAdminSig = sig;
     state.bookings = bookings; state.stats = stats; state.monthData = month;
@@ -2358,20 +2394,31 @@ async function pollAdmin() {
       showToast('success', `${k} nouvelle${k > 1 ? 's' : ''} demande${k > 1 ? 's' : ''} de rendez-vous`);
     }
     updatePendingIndicators();
-    // Rubriques Réglages / Congés : leurs formulaires ne dépendent pas des demandes -> pas de redessin
-    if (state.adminSection === 'rdv') safeRender();
+    // Rubrique Rendez-vous : tout ce qui change s'y voit. Réglages / Congés : seulement si leur configuration a changé.
+    if (state.adminSection === 'rdv' || configChanged) safeRender();
   } catch (e) { /* silencieux : on réessaiera au prochain passage */ }
 }
-// Visiteur : le calendrier se remet à jour (places restantes) quand il revient sur la page, ou chaque minute
+// Visiteur : calendrier (places, jours fermés/bloqués, règles spéciales) et bandeau des congés à jour,
+// toutes les 15 s et dès qu'il revient sur la page. Jamais pendant qu'il remplit sa demande.
+let lastClientSig = '';
 async function pollClient() {
   if (state.view !== 'client' || document.hidden || state.showBookingModal || state.legalModal) return;
   try {
-    const month = await api(`/public/month?year=${state.cursor.year}&month=${state.cursor.month}`);
-    if (JSON.stringify(month) !== JSON.stringify(state.monthData)) { state.monthData = month; safeRender(); }
+    const [month, blocked] = await Promise.all([
+      api(`/public/month?year=${state.cursor.year}&month=${state.cursor.month}`),
+      api('/public/blocked-dates'),
+    ]);
+    const sig = JSON.stringify([month, blocked]);
+    if (sig === lastClientSig) return;
+    const first = lastClientSig === '';
+    lastClientSig = sig;
+    if (first && JSON.stringify(month) === JSON.stringify(state.monthData) && JSON.stringify(blocked) === JSON.stringify(state.blockedDates)) return;
+    state.monthData = month; state.blockedDates = blocked;
+    safeRender();
   } catch (e) { /* silencieux */ }
 }
 setInterval(pollAdmin, POLL_MS);
-setInterval(pollClient, 60000);
+setInterval(pollClient, POLL_MS);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollAdmin(); pollClient(); } });
 
 /* ===================== Init ===================== */
