@@ -429,6 +429,10 @@
   .tel-group select { flex: 0 0 190px; min-width: 0; max-width: 190px; text-overflow: ellipsis; }
   @media (max-width: 420px) { .tel-group select { flex-basis: 150px; max-width: 150px; } }
   .tel-group input { flex: 1 1 auto; min-width: 0; }
+  /* Champ numérique suivi de son unité (« 50 min ») */
+  .input-suffix { position: relative; }
+  .input-suffix input { padding-right: 52px; }
+  .input-suffix span { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-weight: 600; font-size: 0.88rem; pointer-events: none; }
   .legal-box { max-width: 680px; }
   .legal-body { max-height: min(70vh, 640px); overflow-y: auto; font-size: 0.88rem; line-height: 1.6; color: var(--ink); }
   .legal-body h4 { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; margin: 18px 0 6px; color: var(--accent-dark); }
@@ -925,7 +929,12 @@ async function submitSlotForm() {
   
   // Récupérer les valeurs depuis le formulaire DOM
   const heure_debut = document.getElementById('slot-heure')?.value || '';
-  const duree = document.getElementById('slot-duree')?.value || '';
+  const choix = document.getElementById('slot-duree')?.value || '';
+  const duree = choix === 'autre' ? (document.getElementById('slot-duree-autre')?.value || '').trim() : choix;
+  if (choix === 'autre' && !(Number.isInteger(Number(duree)) && Number(duree) >= 5 && Number(duree) <= 480)) {
+    showToast('error', 'Durée « Autre » : indiquez un nombre de minutes entre 5 et 480.');
+    return;
+  }
   
   // Si le responsable est détecté automatiquement, utiliser la valeur du champ caché
   const finalResponsableId = autoDetected ? responsable_id : (document.getElementById('slot-responsable')?.value || ''); // vide = responsable général (choisi par le serveur)
@@ -977,7 +986,9 @@ function renderSlotForm() {
     const bk = state.bookings.find(x => x.id === state.slotForm.bookingId);
     const f = state.slotForm;
     const durees = [15, 30, 45, 60, 90, 120];
-    if (!durees.includes(Number(f.duree))) durees.push(Number(f.duree) || 60);
+    // Durée hors liste (ex. demande rétablie avec 50 min) : on passe directement en « Autre »
+    if (f.duree && f.duree !== 'autre' && !durees.includes(Number(f.duree))) { f.dureeAutre = f.duree; f.duree = 'autre'; }
+    const dureeLabel = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ' ' + (m % 60) : ''}`; // 90 -> « 1 h 30 »
     const minHeure = bk && bk.date === todayIso() ? (() => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })() : '';
     const g = state.adminSettings || {};
     container.innerHTML = `
@@ -987,9 +998,15 @@ function renderSlotForm() {
         <div class="row2">
           <div class="field"><label>Heure de début</label><input id="slot-heure" type="time" value="${esc(f.heure_debut)}" ${minHeure ? `min="${minHeure}"` : ''} oninput="state.slotForm.heure_debut = this.value" /></div>
           <div class="field"><label>Durée</label>
-            <select id="slot-duree" onchange="state.slotForm.duree = this.value">
-              ${durees.sort((x, y) => x - y).map(m => `<option value="${m}" ${Number(f.duree) === m ? 'selected' : ''}>${m < 60 ? m + ' min' : (m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) : '')}</option>`).join('')}
+            <select id="slot-duree" onchange="state.slotForm.duree = this.value; renderSlotForm(); if (this.value === 'autre') document.getElementById('slot-duree-autre')?.focus();">
+              ${durees.map(m => `<option value="${m}" ${String(f.duree) === String(m) ? 'selected' : ''}>${dureeLabel(m)}</option>`).join('')}
+              <option value="autre" ${f.duree === 'autre' ? 'selected' : ''}>Autre…</option>
             </select>
+            ${f.duree === 'autre' ? `
+            <div class="input-suffix" style="margin-top:8px">
+              <input id="slot-duree-autre" type="number" inputmode="numeric" min="5" max="480" step="5" placeholder="Ex : 50" value="${esc(f.dureeAutre || '')}" oninput="state.slotForm.dureeAutre = this.value" aria-label="Durée en minutes" />
+              <span>min</span>
+            </div>` : ''}
           </div>
         </div>
         <div class="field"><label>Responsable ${f.autoDetected ? '(fixé par la règle spéciale de ce jour)' : ''}</label>
