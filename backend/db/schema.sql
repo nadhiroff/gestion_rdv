@@ -58,15 +58,18 @@ CREATE TABLE IF NOT EXISTS bookings (
   prenom VARCHAR(255) NOT NULL,
   tel VARCHAR(50) NOT NULL,
   email VARCHAR(255) NOT NULL,
-  status ENUM('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+  status ENUM('pending','accepted','rejected','cancelled') NOT NULL DEFAULT 'pending', -- cancelled = annulé par le client
   heure_debut TIME NULL,                 -- Heure de début du rendez-vous (ex: '14:30')
   duree INT NULL,                        -- Durée en minutes (ex: 60 pour 1h)
   responsable_id INT NULL,               -- ID du responsable assigné
+  cancel_token CHAR(64) NULL,            -- code secret du lien « Annuler mon rendez-vous » (email)
+  cancelled_at DATETIME NULL,            -- date d'annulation par le client
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_date (date),
   INDEX idx_status (status),
   INDEX idx_responsable (responsable_id),
+  UNIQUE INDEX idx_cancel_token (cancel_token),
   FOREIGN KEY (responsable_id) REFERENCES responsables(id) ON DELETE SET NULL
 );
 

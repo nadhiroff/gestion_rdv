@@ -222,10 +222,54 @@ function addMinutes(hhmm, minutes) {
   const t = h * 60 + m + Number(minutes);
   return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}:00`;
 }
-// Nombre de demandes qui occupent une place ce jour-là (en attente + acceptées)
+// Nombre de demandes qui occupent une place ce jour-là (en attente + acceptées).
+// Une demande refusée ou annulée par le client libère sa place.
 async function countTaken(conn, date) {
-  const [[{ n }]] = await conn.query("SELECT COUNT(*) AS n FROM bookings WHERE date = ? AND status != 'rejected'", [date]);
+  const [[{ n }]] = await conn.query("SELECT COUNT(*) AS n FROM bookings WHERE date = ? AND status IN ('pending','accepted')", [date]);
   return Number(n);
+}
+
+// ---------- Règles anti-abus et annulation par le client ----------
+const CANCEL_DEADLINE_HOURS = 24; // annulation en ligne possible jusqu'à 24 h avant le rendez-vous
+const MAX_CANCELS = 2;            // au-delà de 2 annulations…
+const CANCEL_WINDOW_DAYS = 30;    // …sur 30 jours, plus de réservation en ligne
+const BENIN_OFFSET = '+01:00';    // Bénin : UTC+1 toute l'année (pas d'heure d'été)
+
+// Téléphone comparable : uniquement les 8 derniers chiffres (« +229 01 62… », « 0162… » et « 62… » = même personne)
+function telKey(tel) {
+  return String(tel || '').replace(/\D/g, '').slice(-8);
+}
+function samePerson(row, email, tel) {
+  return row.email.toLowerCase() === email.toLowerCase() || (telKey(tel).length === 8 && telKey(row.tel) === telKey(tel));
+}
+// Début du rendez-vous (heure fixée à l'acceptation ; minuit si encore en attente)
+function appointmentStart(booking) {
+  const time = booking.heure_debut ? String(booking.heure_debut).slice(0, 5) : '00:00';
+  return new Date(`${booking.date}T${time}:00${BENIN_OFFSET}`);
+}
+// Peut-on encore annuler en ligne ? Renvoie { ok } ou { ok:false, raison }
+function cancelCheck(booking) {
+  if (booking.status === 'cancelled') return { ok: false, raison: 'deja_annule' };
+  if (booking.status === 'rejected') return { ok: false, raison: 'refuse' };
+  const start = appointmentStart(booking);
+  if (start.getTime() <= Date.now()) return { ok: false, raison: 'passe' };
+  if (start.getTime() - Date.now() < CANCEL_DEADLINE_HOURS * 3600 * 1000) return { ok: false, raison: 'trop_tard' };
+  return { ok: true, limite: new Date(start.getTime() - CANCEL_DEADLINE_HOURS * 3600 * 1000) };
+}
+// Adresse publique du site (https://meet.rgzsarl.tech), déduite de la requête (trust proxy activé)
+function publicBaseUrl(req) {
+  return (process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+}
+function cancelBlockHtml(url) {
+  return `
+      <div class="info-box">
+        <p><strong>Un empêchement ?</strong> Libérez votre place pour quelqu'un d'autre :</p>
+        <p style="text-align:center"><a class="btn" href="${url}" style="color:#ffffff">Annuler mon rendez-vous</a></p>
+        <p style="font-size:13px;color:#666">Annulation en ligne possible jusqu'à ${CANCEL_DEADLINE_HOURS} h avant le rendez-vous. Ce lien est personnel : ne le transférez pas.</p>
+      </div>`;
+}
+function fmtDateTimeBenin(d) {
+  return d.toLocaleString('fr-FR', { timeZone: APP_TZ, weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 }
 
 async function isDateBlocked(dateStr) {
@@ -289,7 +333,7 @@ app.get('/api/public/month', async (req, res) => {
 
     const [counts] = await pool.query(
       `SELECT date, COUNT(*) as n FROM bookings
-       WHERE date BETWEEN ? AND ? AND status != 'rejected'
+       WHERE date BETWEEN ? AND ? AND status IN ('pending','accepted')
        GROUP BY date`,
       [first, last]
     );
@@ -350,25 +394,53 @@ app.post('/api/bookings', bookingLimiter, async (req, res) => {
     const override = await getOverrideForDate(date);
     const eff = effectiveForDate(settings, override);
 
-    // Verrou par date : deux demandes simultanées pour le même jour passent l'une après
-    // l'autre, sinon les deux pourraient lire « il reste 1 place » et dépasser le maximum.
+    // Verrou unique pour toutes les réservations : les demandes passent l'une après l'autre.
+    // Sinon deux demandes simultanées pourraient lire « il reste 1 place » (et dépasser le maximum),
+    // ou une même personne pourrait réserver deux jours différents au même instant.
+    const LOCK = 'rdv_booking';
     const conn = await pool.getConnection();
     let result;
+    const cancelToken = require('crypto').randomBytes(32).toString('hex');
     try {
-      const [[{ ok }]] = await conn.query('SELECT GET_LOCK(?, 10) AS ok', [`rdv_booking_${date}`]);
+      const [[{ ok }]] = await conn.query('SELECT GET_LOCK(?, 10) AS ok', [LOCK]);
       if (ok !== 1) return res.status(503).json({ error: 'Serveur occupé, réessayez dans un instant.' });
       try {
+        // Règle 1 : une seule demande active (en attente ou acceptée, à venir) par personne (email OU téléphone)
+        const [actives] = await conn.query(
+          "SELECT date, email, tel FROM bookings WHERE status IN ('pending','accepted') AND date >= ?",
+          [todayIso()]
+        );
+        const active = actives.find((r) => samePerson(r, email, tel));
+        if (active) {
+          return res.status(409).json({
+            code: 'DEJA_UNE_DEMANDE',
+            error: `Vous avez déjà une demande en cours pour le ${formatDate(active.date)}. Une seule demande à la fois : annulez-la avec le lien reçu par email, ou attendez qu'elle soit passée ou refusée.`,
+          });
+        }
+        // Règle 2 : trop d'annulations récentes -> plus de réservation en ligne
+        const [annuls] = await conn.query(
+          "SELECT email, tel FROM bookings WHERE status = 'cancelled' AND cancelled_at >= NOW() - INTERVAL ? DAY",
+          [CANCEL_WINDOW_DAYS]
+        );
+        if (annuls.filter((r) => samePerson(r, email, tel)).length >= MAX_CANCELS) {
+          return res.status(409).json({
+            code: 'TROP_ANNULATIONS',
+            error: `Vous avez annulé ${MAX_CANCELS} rendez-vous ces ${CANCEL_WINDOW_DAYS} derniers jours : la réservation en ligne est suspendue. Contactez-nous pour prendre un nouveau rendez-vous.`,
+          });
+        }
+        // Règle 3 : places disponibles ce jour-là
         if ((await countTaken(conn, date)) >= eff.max) return res.status(409).json({ error: 'Journée complète' });
         [result] = await conn.query(
-          'INSERT INTO bookings (date, nom, prenom, tel, email, status) VALUES (?, ?, ?, ?, ?, "pending")',
-          [date, nom, prenom, tel, email]
+          'INSERT INTO bookings (date, nom, prenom, tel, email, status, cancel_token) VALUES (?, ?, ?, ?, ?, "pending", ?)',
+          [date, nom, prenom, tel, email, cancelToken]
         );
       } finally {
-        await conn.query('SELECT RELEASE_LOCK(?)', [`rdv_booking_${date}`]);
+        await conn.query('SELECT RELEASE_LOCK(?)', [LOCK]);
       }
     } finally {
       conn.release();
     }
+    const cancelUrl = `${publicBaseUrl(req)}/annuler/${cancelToken}`;
 
     const dateLabel = formatDate(date);
     // Versions échappées pour les emails HTML (le texte brut garde les valeurs telles quelles)
@@ -405,13 +477,14 @@ app.post('/api/bookings', bookingLimiter, async (req, res) => {
       <div class="info-box">
         <p>Vous recevrez un email dès que votre demande sera <strong>acceptée</strong> ou <strong>refusée</strong>.</p>
       </div>
+      ${cancelBlockHtml(cancelUrl)}
       <p>Merci de votre confiance.</p>
     `);
     const clientMail = await sendMail(
       email,
       `Demande de rendez-vous reçue - ${dateLabel}`,
       clientHtml,
-      `Bonjour ${prenom},\n\nVotre demande de rendez-vous pour le ${dateLabel} a bien été enregistrée et est en attente de confirmation.\nVous recevrez un email dès qu'elle sera acceptée ou refusée.\n\nMerci.`
+      `Bonjour ${prenom},\n\nVotre demande de rendez-vous pour le ${dateLabel} a bien été enregistrée et est en attente de confirmation.\nVous recevrez un email dès qu'elle sera acceptée ou refusée.\n\nUn empêchement ? Annulez en ligne (jusqu'à ${CANCEL_DEADLINE_HOURS} h avant) : ${cancelUrl}\n\nMerci.`
     );
 
     res.status(201).json({
@@ -495,6 +568,9 @@ app.patch('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
   if (!['accepted', 'rejected'].includes(status)) return res.status(400).json({ error: 'Statut invalide' });
   const [[booking]] = await pool.query('SELECT * FROM bookings WHERE id = ?', [req.params.id]);
   if (!booking) return res.status(404).json({ error: 'Introuvable' });
+  if (booking.status === 'cancelled') {
+    return res.status(409).json({ error: 'Ce rendez-vous a été annulé par le client : il ne peut plus être accepté ni refusé.' });
+  }
 
   // Une demande refusée ne compte plus dans les places : la ré-accepter ne doit pas faire dépasser le maximum
   if (status === 'accepted' && booking.status === 'rejected') {
@@ -647,10 +723,11 @@ app.patch('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
         ${dureeLabel ? `<div class="info-row"><span class="info-label">Durée :</span><span class="info-value">${dureeLabel}</span></div>` : ''}
         ${responsableInfo}
       </div>
+      ${booking.cancel_token ? cancelBlockHtml(`${publicBaseUrl(req)}/annuler/${booking.cancel_token}`) : ''}
       <p>Nous vous remercions de votre confiance et nous attendons avec plaisir.</p>
       <p>À très bientôt !</p>
     `);
-    textContent = `Bonjour ${booking.prenom},\n\nVotre rendez-vous du ${dateLabel}${heureLabel ? ` à ${heureLabel}` : ''}${dureeLabel ? ` (${dureeLabel})` : ''}${responsableNom ? ` avec ${responsableNom}` : ''} est confirmé. À bientôt.`;
+    textContent = `Bonjour ${booking.prenom},\n\nVotre rendez-vous du ${dateLabel}${heureLabel ? ` à ${heureLabel}` : ''}${dureeLabel ? ` (${dureeLabel})` : ''}${responsableNom ? ` avec ${responsableNom}` : ''} est confirmé. À bientôt.${booking.cancel_token ? `\n\nUn empêchement ? Annulez en ligne (jusqu'à ${CANCEL_DEADLINE_HOURS} h avant) : ${publicBaseUrl(req)}/annuler/${booking.cancel_token}` : ''}`;
     
     // Envoyer un email à l'administrateur avec les données finales
     const effJour = effectiveForDate(await getSettings(), await getOverrideForDate(booking.date));
@@ -817,12 +894,96 @@ app.delete('/api/admin/date-overrides/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------- Annulation par le client (lien personnel reçu par email) ----------
+// GET : affiche le rendez-vous et dit si l'annulation est encore possible (n'annule rien :
+// les messageries « visitent » parfois les liens des emails). POST : annule vraiment.
+const cancelLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, message: { error: 'Trop de tentatives, réessayez plus tard' } });
+const CANCEL_MSG = {
+  deja_annule: 'Ce rendez-vous a déjà été annulé.',
+  refuse: 'Cette demande a été refusée : il n’y a rien à annuler.',
+  passe: 'Ce rendez-vous est déjà passé.',
+  trop_tard: `Il est trop tard pour annuler en ligne (moins de ${CANCEL_DEADLINE_HOURS} h avant le rendez-vous). Contactez-nous directement.`,
+};
+async function findByToken(token) {
+  if (!/^[0-9a-f]{64}$/.test(String(token))) return null; // évite toute requête avec un code mal formé
+  const [[b]] = await pool.query('SELECT * FROM bookings WHERE cancel_token = ?', [token]);
+  return b || null;
+}
+function publicBooking(b) {
+  const chk = cancelCheck(b);
+  return {
+    date: b.date, prenom: b.prenom, nom: b.nom, status: b.status,
+    heure: b.status === 'accepted' && b.heure_debut ? String(b.heure_debut).slice(0, 5) : null,
+    peutAnnuler: chk.ok,
+    raison: chk.ok ? null : CANCEL_MSG[chk.raison],
+    limite: chk.ok ? fmtDateTimeBenin(chk.limite) : null,
+  };
+}
+
+app.get('/api/public/cancel/:token', cancelLimiter, asyncHandler(async (req, res) => {
+  const b = await findByToken(req.params.token);
+  if (!b) return res.status(404).json({ error: 'Lien d’annulation invalide ou expiré.' });
+  res.json(publicBooking(b));
+}));
+
+app.post('/api/public/cancel/:token', cancelLimiter, asyncHandler(async (req, res) => {
+  const b = await findByToken(req.params.token);
+  if (!b) return res.status(404).json({ error: 'Lien d’annulation invalide ou expiré.' });
+  const chk = cancelCheck(b);
+  if (!chk.ok) return res.status(409).json({ error: CANCEL_MSG[chk.raison], ...publicBooking(b) });
+
+  // La condition sur le statut évite une double annulation (deux clics simultanés)
+  const [upd] = await pool.query(
+    "UPDATE bookings SET status = 'cancelled', cancelled_at = NOW() WHERE id = ? AND status IN ('pending','accepted')",
+    [b.id]
+  );
+  if (upd.affectedRows === 0) return res.status(409).json({ error: CANCEL_MSG.deja_annule });
+
+  const dateLabel = formatDate(b.date);
+  const heure = b.status === 'accepted' && b.heure_debut ? String(b.heure_debut).slice(0, 5) : '';
+  const hb = { nom: escHtml(b.nom), prenom: escHtml(b.prenom), tel: escHtml(b.tel), email: escHtml(b.email) };
+
+  // Prévenir le responsable du jour : rien à faire de son côté, la place est déjà libérée
+  const eff = effectiveForDate(await getSettings(), await getOverrideForDate(b.date));
+  if (eff.responsable_email) {
+    await sendMail(
+      eff.responsable_email,
+      `Rendez-vous annulé par le client - ${dateLabel}`,
+      htmlTemplate('Rendez-vous annulé', `
+        <h2>🚫 Rendez-vous annulé par le client</h2>
+        <p>Le client a annulé lui-même son rendez-vous. <strong>Aucune action n'est nécessaire</strong> : la place a été libérée automatiquement dans le calendrier.</p>
+        <div class="info-box">
+          <div class="info-row"><span class="info-label">Client :</span><span class="info-value">${hb.prenom} ${hb.nom}</span></div>
+          <div class="info-row"><span class="info-label">Téléphone :</span><span class="info-value">${hb.tel}</span></div>
+          <div class="info-row"><span class="info-label">Email :</span><span class="info-value">${hb.email}</span></div>
+          <div class="info-row"><span class="info-label">Date :</span><span class="info-value">${dateLabel}${heure ? ' à ' + heure : ''}</span></div>
+        </div>`),
+      `Rendez-vous annulé par le client (aucune action nécessaire, la place est libérée).\nClient : ${b.prenom} ${b.nom}\nTél : ${b.tel}\nEmail : ${b.email}\nDate : ${dateLabel}${heure ? ' à ' + heure : ''}`
+    );
+  }
+  // Confirmation au client
+  await sendMail(
+    b.email,
+    `Rendez-vous annulé - ${dateLabel}`,
+    htmlTemplate('Rendez-vous annulé', `
+      <h2>Votre rendez-vous est annulé</h2>
+      <p>Bonjour <strong>${hb.prenom}</strong>,</p>
+      <p>Votre rendez-vous du <strong>${dateLabel}${heure ? ' à ' + heure : ''}</strong> a bien été annulé. Merci d'avoir libéré votre place.</p>
+      <p>Vous pouvez faire une nouvelle demande à tout moment sur notre site.</p>`),
+    `Bonjour ${b.prenom},\n\nVotre rendez-vous du ${dateLabel}${heure ? ' à ' + heure : ''} a bien été annulé. Merci d'avoir libéré votre place.`
+  );
+
+  res.json({ ok: true, ...publicBooking({ ...b, status: 'cancelled' }) });
+}));
+
 // Sert le frontend (frontend/index.html) à la racine, pour pouvoir ouvrir
 // directement http://localhost:4000 sans Apache en local.
 const FRONTEND_DIR = require('path').join(__dirname, '..', 'frontend');
 app.use(express.static(FRONTEND_DIR));
 // Espace administrateur sur son propre lien : http://localhost:4000/admin
 app.get(['/admin', '/admin/'], (req, res) => res.sendFile(require('path').join(FRONTEND_DIR, 'index.html')));
+// Page « Annuler mon rendez-vous » (lien envoyé par email)
+app.get('/annuler/:token', (req, res) => res.sendFile(require('path').join(FRONTEND_DIR, 'index.html')));
 
 // Middleware d'erreur global : capte tout ce qui n'a pas été géré plus haut
 // et répond proprement au lieu de laisser la requête planter le serveur.
@@ -834,7 +995,8 @@ app.use((err, req, res, next) => {
 
 // ---------- Démarrage ----------
 const PORT = process.env.PORT || 4000;
-ensureAdminCode()
+require('./db-migrate').migrate(pool) // ajoute les colonnes manquantes (base locale existante)
+  .then(() => ensureAdminCode())
   .then(() => verifySmtp())
   .then(() => {
     app.listen(PORT, () => {

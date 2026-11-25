@@ -367,6 +367,7 @@
   .status-pill.pending { background: var(--warning-soft); color: var(--warning); }
   .status-pill.accepted { background: var(--success-soft); color: var(--success); }
   .status-pill.rejected { background: var(--danger-soft); color: var(--danger); }
+  .status-pill.cancelled { background: var(--closed-soft); color: #5B6476; }
   .row-actions { display: flex; gap: 6px; }
 
   .empty-state { border: 1.5px dashed var(--line); border-radius: var(--radius-sm); padding: 30px; text-align: center; color: var(--ink-soft); font-size: 0.88rem; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -389,6 +390,22 @@
   .footer-section p { font-size: 0.85rem; color: var(--ink-soft); margin: 6px 0 0 0; line-height: 1.5; }
   .footer-link { color: var(--accent); text-decoration: none; font-weight: 600; transition: all 0.3s; }
   .footer-link:hover { color: #dc2626; animation: socialPulse 0.6s ease-in-out; }
+  .cancel-card { max-width: 520px; margin: 10px auto 0; text-align: center; padding: 30px 26px; }
+  .cancel-card h3 { margin: 6px 0 8px; font-size: 1.3rem; justify-content: center; text-align: center; }
+  .cancel-recap b { text-align: right; }
+  .cancel-card .sub { line-height: 1.6; margin-bottom: 16px; }
+  .cancel-icon { width: 56px; height: 56px; margin: 0 auto 6px; border-radius: 50%; display: grid; place-items: center; }
+  .cancel-icon.ok { background: var(--success-soft); color: var(--success); }
+  .cancel-icon.warn { background: var(--warning-soft); color: var(--warning); }
+  .cancel-icon.bad { background: var(--closed-soft); color: #5B6476; }
+  .cancel-recap { text-align: left; background: var(--surface-tint); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 16px; margin: 14px 0 16px; }
+  .cancel-recap > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; font-size: 0.88rem; border-top: 1px dashed var(--line); }
+  .cancel-recap > div:first-child { border-top: none; }
+  .cancel-recap span { color: var(--ink-soft); }
+  .cancel-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .cancel-actions .btn { flex: 1 1 180px; justify-content: center; }
+  .cancel-contact { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; font-size: 0.88rem; margin: 0 0 16px; }
+  .cancel-contact a { color: var(--accent); font-weight: 600; }
   .legal-box { max-width: 680px; }
   .legal-body { max-height: min(70vh, 640px); overflow-y: auto; font-size: 0.88rem; line-height: 1.6; color: var(--ink); }
   .legal-body h4 { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; margin: 18px 0 6px; color: var(--accent-dark); }
@@ -483,15 +500,21 @@ const API = isLocalDev ? API_DEV_URL : '/api';
 function isAdminUrl() {
   return /\/admin\/?$/.test(window.location.pathname) || window.location.hash === '#admin';
 }
+// Lien reçu par email : /annuler/<code secret de 64 caractères>
+function cancelTokenFromUrl() {
+  const m = window.location.pathname.match(/\/annuler\/([0-9a-f]{64})\/?$/);
+  return m ? m[1] : null;
+}
 
 const JOURS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
 const JOURS_LONG = ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
-const STATUS_LABEL = { pending: 'En attente', accepted: 'Accepté', rejected: 'Refusé' };
+const STATUS_LABEL = { pending: 'En attente', accepted: 'Accepté', rejected: 'Refusé', cancelled: 'Annulé par le client' };
 
 /* ===================== État ===================== */
 const state = {
   // L'espace admin est sur un lien séparé : /admin (ou #admin si la page est ouverte en fichier)
-  view: isAdminUrl() ? 'admin' : 'client',
+  view: cancelTokenFromUrl() ? 'cancel' : (isAdminUrl() ? 'admin' : 'client'),
+  cancel: { token: cancelTokenFromUrl(), loading: true, data: null, error: '', submitting: false, done: false },
   // Rubrique affichée dans l'admin : 'rdv' | 'reglages' | 'exceptions'
   adminSection: (() => { try { return localStorage.getItem('rdv_admin_section') || 'rdv'; } catch (e) { return 'rdv'; } })(),
   cursor: (() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() }; })(),
@@ -672,6 +695,7 @@ async function submitBooking() {
     loadMonth();
   } catch (e) {
     state.formError = e.message;
+    loadMonth(); // la journée a pu devenir complète entre-temps : on met le calendrier à jour
   } finally {
     state.submitting = false; render();
   }
@@ -1043,7 +1067,7 @@ function render() {
         <button class="tab" onclick="goToSite()">${ic('calendar', 16)} Voir le site</button>
       </div>` : ''}
     </div>
-    ${state.view === 'client' ? renderClient() : renderAdmin()}
+    ${state.view === 'client' ? renderClient() : state.view === 'cancel' ? renderCancel() : renderAdmin()}
     ${state.showBookingModal ? renderBookingModal() : ''}
     ${renderConfirmDialogModal()}
     ${state.legalModal ? renderLegalModal() : ''}
@@ -1090,7 +1114,7 @@ function setView(v) {
 // Retour à la page publique (enlève /admin ou #admin de l'adresse)
 function goToSite() {
   if (location.hash === '#admin') { location.hash = ''; location.reload(); return; }
-  location.href = location.pathname.replace(/\/admin\/?$/, '/') || '/';
+  location.href = location.pathname.replace(/\/(admin|annuler\/[0-9a-f]+)\/?$/, '/') || '/';
 }
 
 /* ---- Calendrier (partagé client / admin) ---- */
@@ -1245,7 +1269,7 @@ function renderBookingModal() {
             <div class="email-status-row">
               <span class="email-status-chip ${c.emailClientEnvoye ? 'ok' : 'warn'}">${ic(c.emailClientEnvoye ? 'checkCircle' : 'ban', 13)} ${c.emailClientEnvoye ? 'Email de confirmation envoyé' : 'Email non envoyé (problème serveur)'}</span>
             </div>` : ''}
-            <div class="confirm-note">${ic('info',16)}<span>Le responsable va <strong>accepter</strong> ou <strong>refuser</strong> votre demande — vous recevrez un email dans les deux cas, à l'adresse indiquée ci-dessus.</span></div>
+            <div class="confirm-note">${ic('info',16)}<span>Le responsable va <strong>accepter</strong> ou <strong>refuser</strong> votre demande — vous recevrez un email dans les deux cas, à l'adresse indiquée ci-dessus. Un empêchement ? L'email contient un lien pour <strong>annuler en ligne</strong> (jusqu'à 24 h avant).</span></div>
             <button class="btn btn-primary btn-block" onclick="closeBookingModal()">${ic('check',16)} Fermer</button>
           </div>
         </div>
@@ -1328,6 +1352,7 @@ function renderAdmin() {
             <option value="pending" ${state.filters.status === 'pending' ? 'selected' : ''}>En attente</option>
             <option value="accepted" ${state.filters.status === 'accepted' ? 'selected' : ''}>Acceptés</option>
             <option value="rejected" ${state.filters.status === 'rejected' ? 'selected' : ''}>Refusés</option>
+            <option value="cancelled" ${state.filters.status === 'cancelled' ? 'selected' : ''}>Annulés par le client</option>
           </select>
           <button class="btn btn-secondary btn-sm" onclick="clearFilters()">${ic('list',15)} Voir tout</button>
         </div>
@@ -1599,7 +1624,7 @@ function renderDayDetails(iso) {
   const cell = ((state.monthData && state.monthData.days) || []).find(d => d.date === iso);
   const o = overrides[0];
   const max = cell ? cell.max : (o && o.max_par_jour != null ? o.max_par_jour : s.max_par_jour);
-  const taken = cell ? cell.max - cell.restant : state.bookings.filter(b => b.date === iso && b.status !== 'rejected').length;
+  const taken = cell ? cell.max - cell.restant : state.bookings.filter(b => b.date === iso && (b.status === 'pending' || b.status === 'accepted')).length;
   const respNom = o && (o.responsable_nom || o.responsable_email) ? o.responsable_nom : s.responsable_nom;
   const respEmail = o && o.responsable_email ? o.responsable_email : s.responsable_email;
 
@@ -1750,6 +1775,68 @@ function attachFormListeners() {
   bind('f-nom', 'nom'); bind('f-prenom', 'prenom'); bind('f-tel', 'tel'); bind('f-email', 'email');
   document.addEventListener('keydown', escHandler);
 }
+/* ===================== Page « Annuler mon rendez-vous » (lien reçu par email) ===================== */
+async function loadCancel() {
+  try {
+    state.cancel.data = await api(`/public/cancel/${state.cancel.token}`);
+  } catch (e) { state.cancel.error = e.message; }
+  state.cancel.loading = false;
+  render();
+}
+async function confirmCancel() {
+  state.cancel.submitting = true; render();
+  try {
+    state.cancel.data = await api(`/public/cancel/${state.cancel.token}`, { method: 'POST', body: '{}' });
+    state.cancel.done = true;
+  } catch (e) {
+    showToast('error', e.message);
+    try { state.cancel.data = await api(`/public/cancel/${state.cancel.token}`); } catch (_) {}
+  }
+  state.cancel.submitting = false; render();
+}
+function renderCancel() {
+  const c = state.cancel, d = c.data;
+  const contact = `<p class="cancel-contact">${ic('mail',15)} <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a> &nbsp;·&nbsp; ${ic('phone',15)} <a href="tel:+2290162000062">+229 01 62 00 00 62</a></p>`;
+  let body;
+  if (c.loading) body = `<p class="sub">${ic('clock',16)} Chargement de votre rendez-vous…</p>`;
+  else if (c.error) body = `
+      <div class="cancel-icon bad">${ic('ban', 26)}</div>
+      <h3 class="display">Lien invalide</h3>
+      <p class="sub">${esc(c.error)} Vérifiez que vous avez bien copié le lien complet reçu par email.</p>${contact}`;
+  else {
+    const jour = fmtDateLong(d.date);
+    const quand = `${jour.charAt(0).toUpperCase() + jour.slice(1)}${d.heure ? ' à ' + d.heure : ''}`; // « Jeudi 4 mars 2027 à 10:30 »
+    const recap = `
+      <div class="cancel-recap">
+        <div><span>Rendez-vous</span><b>${esc(quand)}</b></div>
+        <div><span>Au nom de</span><b>${esc(d.prenom)} ${esc(d.nom)}</b></div>
+        <div><span>Statut</span><b><span class="status-pill ${d.status}">${STATUS_LABEL[d.status] === 'Annulé par le client' ? 'Annulé' : STATUS_LABEL[d.status]}</span></b></div>
+      </div>`;
+    if (c.done) body = `
+      <div class="cancel-icon ok">${ic('check', 26)}</div>
+      <h3 class="display">Rendez-vous annulé</h3>
+      <p class="sub">Merci d'avoir libéré votre place : quelqu'un d'autre pourra en profiter. Un email de confirmation vous a été envoyé.</p>
+      ${recap}
+      <button class="btn btn-primary btn-block" onclick="goToSite()">${ic('calendar',16)} Prendre un nouveau rendez-vous</button>`;
+    else if (d.peutAnnuler) body = `
+      <div class="cancel-icon warn">${ic('calendar', 26)}</div>
+      <h3 class="display">Annuler mon rendez-vous ?</h3>
+      ${recap}
+      <p class="sub">Vous pouvez annuler jusqu'au <b>${esc(d.limite)}</b>. Votre place sera aussitôt libérée pour une autre personne. <b>Cette action est définitive.</b></p>
+      <div class="cancel-actions">
+        <button class="btn btn-secondary" onclick="goToSite()">Garder mon rendez-vous</button>
+        <button class="btn btn-danger" onclick="confirmCancel()" ${c.submitting ? 'disabled' : ''}>${c.submitting ? '<span class="spinner"></span> Annulation…' : ic('close',16) + " Confirmer l'annulation"}</button>
+      </div>`;
+    else body = `
+      <div class="cancel-icon bad">${ic('info', 26)}</div>
+      <h3 class="display">Annulation en ligne impossible</h3>
+      ${recap}
+      <p class="sub">${esc(d.raison)}</p>${d.status === 'pending' || d.status === 'accepted' ? contact : ''}
+      <button class="btn btn-secondary btn-block" onclick="goToSite()">${ic('calendar',16)} Retour au site</button>`;
+  }
+  return `<div class="page"><div class="panel cancel-card">${body}</div></div>`;
+}
+
 /* ===================== Politique de confidentialité / Conditions d'utilisation ===================== */
 const LEGAL_UPDATED = '25 novembre 2026';
 const LEGAL = {
@@ -1783,11 +1870,14 @@ const LEGAL = {
       <h4>1. Fonctionnement</h4>
       <p>Vous choisissez un jour disponible et envoyez une <strong>demande</strong>. Cette demande n'est pas encore un rendez-vous confirmé : elle est examinée par le responsable, qui l'accepte ou la refuse. Vous recevez un email dans les deux cas, avec l'heure du rendez-vous en cas d'acceptation.</p>
       <h4>2. Nombre de places</h4>
-      <p>Chaque jour dispose d'un nombre limité de places. Une place est réservée dès l'envoi de votre demande et libérée si elle est refusée. Un jour affiché « Complet » ne peut plus être demandé.</p>
+      <p>Chaque jour dispose d'un nombre limité de places. Une place est réservée dès l'envoi de votre demande et libérée si elle est refusée ou annulée. Un jour affiché « Complet » ne peut plus être demandé.</p>
+      <p>Pour que chacun ait sa chance, <strong>une seule demande à la fois</strong> est possible par personne (même email ou même numéro de téléphone) : pour en faire une autre, attendez que la précédente soit passée ou refusée, ou annulez-la.</p>
       <h4>3. Exactitude des informations</h4>
       <p>Merci d'indiquer des coordonnées exactes : elles sont indispensables pour vous confirmer le rendez-vous. Une demande avec des coordonnées erronées peut être refusée.</p>
       <h4>4. Annulation ou modification</h4>
-      <p>Pour annuler ou déplacer un rendez-vous, prévenez-nous le plus tôt possible à <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a> ou au <a href="tel:+2290162000062">+229 01 62 00 00 62</a>, afin de libérer la place pour une autre personne.</p>
+      <p>Chaque email de demande et de confirmation contient un lien personnel <strong>« Annuler mon rendez-vous »</strong>. L'annulation en ligne est possible jusqu'à <strong>24 h avant</strong> le rendez-vous (pour une demande encore en attente : jusqu'à la veille, minuit). La place est aussitôt libérée pour une autre personne.</p>
+      <p>Passé ce délai, ou pour déplacer un rendez-vous, contactez-nous à <a href="mailto:rgz@rgz.bj">rgz@rgz.bj</a> ou au <a href="tel:+2290162000062">+229 01 62 00 00 62</a>.</p>
+      <p>Après <strong>2 annulations en 30 jours</strong>, la réservation en ligne est suspendue : il faut alors nous contacter pour prendre rendez-vous.</p>
       <h4>5. Usage du service</h4>
       <p>Le service doit être utilisé de bonne foi. Les demandes abusives ou répétées sans motif peuvent être refusées.</p>
       <h4>6. Disponibilité</h4>
@@ -1823,7 +1913,8 @@ function escHandler(e) {
 
 /* ===================== Init ===================== */
 render();
-loadMonth();
+if (state.view === 'cancel') loadCancel();
+else loadMonth();
 if (state.view === 'admin' && state.adminToken) loadAdminData();
 </script>
 </body>

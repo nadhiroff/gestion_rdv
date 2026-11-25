@@ -19,6 +19,7 @@ const mysql = require('mysql2/promise');
     multipleStatements: true,
   });
   await conn.query(cleaned);
+  await require('./db-migrate').migrate(conn); // colonnes ajoutées après la création des tables
   await conn.end();
   console.log('Base de données : schéma vérifié / appliqué.');
 })().catch((e) => {
