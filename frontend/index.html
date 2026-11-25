@@ -198,7 +198,9 @@
   .modal-close:hover { background: var(--danger-soft); color: var(--danger); }
   .modal-body { padding: 18px 22px 24px; }
 
-  .confirm-box { text-align: center; padding: 6px 0; }
+  /* Marges intérieures de la fenêtre « Demande envoyée » (avant : 0 à gauche/droite -> blocs collés aux bords) */
+  .modal-body.confirm-box { text-align: center; padding: 30px 26px 26px; }
+  @media (max-width: 480px) { .modal-body.confirm-box { padding: 26px 18px 20px; } }
   .confirm-icon { width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, var(--success), #2FD180); color: #fff; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; box-shadow: 0 8px 20px rgba(23,168,96,.35); animation: popIn .35s cubic-bezier(.2,.9,.3,1.3); }
   .confirm-title { font-size: 1.22rem; margin: 0 0 4px; }
   .confirm-date { display: inline-flex; align-items: center; gap: 6px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 20px; padding: 4px 12px; font-size: 0.8rem; font-weight: 700; text-transform: capitalize; margin-top: 6px; }
@@ -1319,7 +1321,7 @@ function renderBookingModal() {
     return `
       <div class="modal-overlay" onclick="if(event.target===this) closeBookingModal()">
         <div class="modal-box">
-          <div class="modal-body confirm-box" style="padding-top:28px">
+          <div class="modal-body confirm-box">
             <div class="confirm-icon">${ic('check', 28)}</div>
             <h3 class="display confirm-title">Demande envoyée !</h3>
             <div class="sub" style="color:var(--ink-soft);font-size:0.86rem">Votre créneau est réservé, en attente de validation</div>
