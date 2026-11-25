@@ -3,6 +3,136 @@
 Application complète : calendrier public de réservation + espace administrateur protégé par code,
 notifications email automatiques (Nodemailer), base de données MySQL, à déployer derrière Apache.
 
+## Règles de fonctionnement
+
+> Cette section décrit, sans termes techniques, comment fonctionne le service de prise de
+> rendez-vous. Elle peut être lue ou transmise telle quelle à la direction.
+>
+> - Site public : https://meet.rgzsarl.tech
+> - Espace d'administration : https://meet.rgzsarl.tech/admin
+
+### 1. Le principe
+
+1. Le visiteur choisit un **jour disponible** dans le calendrier et remplit un formulaire
+   (nom, prénom, téléphone, email).
+2. Il envoie une **demande**. Ce n'est pas encore un rendez-vous confirmé.
+3. Le responsable reçoit un email, puis **accepte** ou **refuse** la demande depuis l'espace
+   d'administration.
+4. Le visiteur reçoit un email dans les deux cas. En cas d'acceptation, l'email indique
+   **l'heure**, la **durée** et le **responsable** du rendez-vous.
+
+Le visiteur ne choisit donc qu'un **jour**. C'est le responsable qui fixe l'heure au moment
+d'accepter.
+
+### 2. Les places disponibles
+
+| Règle | Détail |
+|---|---|
+| **Nombre maximum par jour** | Fixé dans *Réglages généraux* (3 par défaut). Il s'applique à tous les jours ouverts. |
+| **Une place est prise dès la demande** | Une demande **en attente** occupe déjà sa place, sans attendre qu'elle soit acceptée. Avec un maximum de 4, la 5ᵉ personne ne peut plus demander ce jour-là, même si aucune demande n'a encore été acceptée. |
+| **Une place se libère** | Quand le responsable **refuse** la demande, quand le visiteur **annule** lui-même, ou quand la demande est **supprimée**. |
+| **Jour « Complet »** | Le jour ne peut plus être demandé. Le calendrier public affiche le nombre de **places restantes** (« 2 places », « 1 place » en orange, « Complet »). |
+| **Demandes simultanées** | Si plusieurs personnes valident au même instant pour la dernière place, **une seule** l'obtient. Les autres reçoivent « Journée complète ». |
+| **Dates passées** | Impossible de demander une date passée. Le jour même reste possible tant qu'il reste de la place. |
+| **Heure de référence** | Heure du Bénin pour toutes les dates et tous les délais. |
+
+### 3. Jours fermés et exceptions
+
+| Réglage (espace admin) | Effet |
+|---|---|
+| **Jours fermés récurrents** (*Réglages généraux*) | Ces jours de la semaine ne sont jamais ouverts (par défaut : le dimanche). |
+| **Bloquer une période** (*Congés & exceptions*) | Aucune demande possible sur ces dates (congés, jour férié, déplacement…). Pour un seul jour, laisser la date de fin vide. Le **motif** est une note interne : il n'est **jamais montré** au public. |
+| **Règle spéciale par date** (*Congés & exceptions*) | Les jours restent ouverts, mais avec un **autre maximum** et/ou un **autre responsable**, qui recevra alors les emails de ces jours-là. Sans règle spéciale, le réglage général s'applique. |
+
+Bloquer une période n'annule pas les demandes déjà reçues pour ces dates : il faut les refuser
+une par une si nécessaire.
+
+### 4. Une seule demande à la fois par personne
+
+Pour éviter qu'une même personne bloque plusieurs places ou plusieurs jours :
+
+- une personne ne peut avoir **qu'une seule demande active** à la fois (en attente ou acceptée,
+  pour une date à venir) ;
+- une « même personne », c'est le **même email** ou le **même numéro de téléphone**, quelle que soit
+  la façon de l'écrire (`+229 01 11 22 33 44`, `0111223344`… sont reconnus comme identiques) ;
+- elle pourra refaire une demande quand la précédente sera **passée**, **refusée** ou **annulée**.
+
+Le message affiché au visiteur lui indique la date de sa demande en cours.
+
+### 5. Annulation par le visiteur
+
+- Chaque email **« Demande reçue »** et **« Rendez-vous confirmé »** contient un bouton
+  **« Annuler mon rendez-vous »**, avec un lien personnel et secret, impossible à deviner.
+- Ce lien ouvre une page qui affiche le rendez-vous. L'annulation ne se fait qu'après un clic sur
+  **« Confirmer l'annulation »** : ouvrir le lien seul n'annule rien.
+- **Délai** : annulation en ligne possible jusqu'à **24 h avant** le rendez-vous. Pour une demande
+  encore en attente (sans heure fixée), c'est jusqu'à **la veille à minuit**. Passé ce délai, la
+  page invite le visiteur à contacter l'entreprise par email ou par téléphone.
+- L'annulation est **définitive**. La place est **libérée immédiatement** pour quelqu'un d'autre.
+- **Limite** : après **2 annulations en 30 jours**, la réservation en ligne est **suspendue** pour
+  cette personne (même email ou même téléphone). Elle doit alors contacter l'entreprise. La
+  suspension se lève d'elle-même quand ses annulations ont plus de 30 jours.
+- Les demandes faites **avant la mise en place de l'annulation en ligne** (25 novembre 2026)
+  n'ont pas de lien : ces visiteurs doivent contacter l'entreprise.
+
+**Pour la direction : aucune action à faire.** Le responsable reçoit un email d'information, et la
+demande apparaît dans l'admin avec le statut **« Annulé par le client »**. Un rendez-vous annulé
+ne peut plus être accepté par erreur.
+
+### 6. Le travail du responsable (espace admin)
+
+| Action | Ce qui se passe |
+|---|---|
+| **Accepter** | Choisir l'**heure de début**, la **durée** et, si besoin, le **responsable**. Le visiteur reçoit sa confirmation par email. |
+| **Conflit d'horaire** | Si le responsable choisi a déjà un rendez-vous accepté qui **chevauche** ce créneau, l'acceptation est refusée. Exemple : 9 h 00–10 h 00 déjà pris, alors 9 h 30 est refusé, mais 10 h 00 est accepté. |
+| **Refuser** | Le visiteur reçoit un email de refus, et la place se libère. |
+| **Supprimer** | La demande est effacée définitivement (après confirmation). La place se libère. |
+| **Filtrer** | Cliquer sur un jour du calendrier affiche ses rendez-vous (recliquer pour tout réafficher). Filtre par statut : en attente, acceptés, refusés, annulés par le client. |
+
+Sur téléphone, les rubriques de l'admin sont regroupées dans un **menu ☰**.
+
+### 7. Emails envoyés automatiquement
+
+| Événement | Le visiteur reçoit | Le responsable reçoit |
+|---|---|---|
+| Nouvelle demande | Accusé de réception + lien d'annulation | « Nouvelle demande » avec les coordonnées du visiteur |
+| Demande acceptée | Confirmation : date, heure, durée, responsable + lien d'annulation | Récapitulatif du rendez-vous accepté |
+| Demande refusée | Email de refus, avec invitation à choisir une autre date | — |
+| Annulation par le visiteur | Confirmation de l'annulation | Information « aucune action nécessaire » |
+
+Le **responsable** qui reçoit les emails est celui de la **règle spéciale** du jour s'il y en a
+une, sinon le **responsable général** (*Réglages généraux*). **Si aucun email de responsable
+n'est renseigné, personne n'est prévenu des nouvelles demandes.**
+
+### 8. Accès à l'administration
+
+- L'espace admin est protégé par un **code d'accès**.
+- Le code se change dans *Réglages généraux* › **Code d'accès admin**. Le **code actuel** est
+  demandé.
+- Une connexion reste valable **12 heures**, après quoi il faut ressaisir le code.
+- Après **10 codes erronés en 15 minutes**, les tentatives sont bloquées temporairement.
+
+### 9. Protections du formulaire public
+
+- Les champs sont vérifiés : email valide, numéro de téléphone valide, nom et prénom de 80
+  caractères maximum.
+- Une même connexion internet est limitée à **20 demandes par heure**, contre les envois en masse.
+- Le texte saisi par les visiteurs est toujours affiché comme du texte simple : il ne peut pas
+  exécuter de code dans l'espace admin ni dans les emails.
+
+### 10. Données personnelles
+
+- Données collectées : nom, prénom, téléphone, email et date souhaitée. Rien d'autre (pas de
+  cookie publicitaire ni de suivi).
+- Elles ne servent qu'à traiter les demandes de rendez-vous.
+- Une **politique de confidentialité** et des **conditions d'utilisation** sont accessibles en bas
+  de chaque page. Elles citent la loi n° 2017-20 (Code du numérique du Bénin) et l'APDP.
+
+> **À valider par la direction :** la politique de confidentialité annonce une conservation des
+> données de **12 mois après le rendez-vous** et mentionne **RGZ SARL** comme responsable. La
+> suppression automatique après 12 mois **n'est pas encore en place** : à ajouter, ou bien la
+> durée annoncée est à modifier.
+
 ## Fonctionnalités
 - Calendrier responsive (mobile / tablette / desktop)
 - Blocage de journées fixes de la semaine (ex: dimanche)
@@ -17,6 +147,10 @@ notifications email automatiques (Nodemailer), base de données MySQL, à déplo
 - Envoi automatique d'email au responsable à chaque demande + accusé de réception au client
 - L'admin peut **accepter** ou **refuser** une demande → email automatique envoyé au client
 - Changement du code d'accès admin depuis l'espace admin (Réglages généraux), code actuel exigé
+- **Annulation en ligne par le client** (lien personnel dans les emails, jusqu'à 24 h avant), place libérée automatiquement
+- **Règles anti-abus** : une seule demande active par personne (email ou téléphone), suspension après 2 annulations en 30 jours
+- Politique de confidentialité et conditions d'utilisation (pied de page)
+- Voir **Règles de fonctionnement** ci-dessus pour le détail complet
 - Filtrage des rendez-vous par jour précis, par période, par statut, avec un bouton "Aujourd'hui"
 - Stockage MySQL (aucune donnée en localStorage côté client, tout passe par l'API)
 
