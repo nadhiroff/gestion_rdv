@@ -597,9 +597,9 @@ function renderToast() {
 }
 
 /* ---- Boîte de confirmation générique (suppression, déconnexion...) ---- */
-function showConfirmDialog({ title, message, confirmLabel, cancelLabel, danger, onConfirm }) {
+function showConfirmDialog({ title, message, confirmLabel, cancelLabel, danger, icon, onConfirm }) {
   state.confirmDialog = {
-    title, message,
+    title, message, icon,
     confirmLabel: confirmLabel || 'Confirmer',
     cancelLabel: cancelLabel || 'Annuler',
     danger: !!danger,
@@ -624,7 +624,7 @@ function renderConfirmDialogModal() {
     <div class="modal-overlay" onclick="if(event.target===this) closeConfirmDialog()">
       <div class="modal-box confirm-modal">
         <div class="modal-body">
-          <div class="confirm-modal-icon ${c.danger ? 'danger' : 'neutral'}">${ic(c.danger ? 'trash' : 'logout', 25)}</div>
+          <div class="confirm-modal-icon ${c.danger ? 'danger' : 'neutral'}">${ic(c.icon || (c.danger ? 'trash' : 'logout'), 25)}</div>
           <h3 class="display">${c.title}</h3>
           <p>${c.message}</p>
           <div class="confirm-modal-actions">
@@ -852,8 +852,8 @@ async function setBookingStatus(id, status) {
     
     state.slotForm = {
       bookingId: id,
-      heure_debut: '',
-      duree: '60',
+      heure_debut: booking.heure_debut ? String(booking.heure_debut).slice(0, 5) : '', // ex. demande rétablie
+      duree: booking.duree ? String(booking.duree) : '60',
       responsable_id: defaultResponsableId,
       autoDetected: !!autoResponsableId // Indicateur si le responsable a été détecté automatiquement
     };
@@ -969,6 +969,27 @@ function renderSlotForm() {
   } else {
     container.innerHTML = '';
   }
+}
+function restoreBooking(id) {
+  const b = state.bookings.find((x) => x.id === id);
+  const qui = b ? `${esc(b.prenom)} ${esc(b.nom)}` : 'cette personne';
+  showConfirmDialog({
+    title: 'Rétablir cette demande ?',
+    message: b
+      ? `La demande de ${qui} pour le ${fmtDateShort(b.date)} (${b.status === 'cancelled' ? 'annulée par le client' : 'refusée'}) redeviendra « En attente » et reprendra une place ce jour-là. Vous pourrez ensuite l'accepter normalement.`
+      : 'La demande redeviendra « En attente ».',
+    confirmLabel: 'Rétablir',
+    danger: false,
+    icon: 'clock',
+    onConfirm: async () => {
+      try {
+        await api(`/admin/bookings/${id}/restore`, { method: 'POST', body: '{}' });
+        showToast('success', 'Demande rétablie : elle est de nouveau en attente.');
+        await loadBookings();
+        loadMonth();
+      } catch (e) { showToast('error', e.message); }
+    },
+  });
 }
 function deleteBooking(id) {
   const b = state.bookings.find((x) => x.id === id);
@@ -1445,6 +1466,9 @@ function renderAdmin() {
                       ${b.status === 'pending' ? `
                         <button class="btn btn-accept btn-sm" onclick="setBookingStatus(${b.id}, 'accepted')">${ic('check',14)} Accepter</button>
                         <button class="btn btn-danger btn-sm" onclick="setBookingStatus(${b.id}, 'rejected')">${ic('close',14)} Refuser</button>
+                      ` : ''}
+                      ${(b.status === 'rejected' || b.status === 'cancelled') && b.date >= todayIso() ? `
+                        <button class="btn btn-secondary btn-sm" title="Remettre cette demande en attente" onclick="restoreBooking(${b.id})">${ic('chevronLeft',14)} Rétablir</button>
                       ` : ''}
                       <button class="icon-btn del" title="Supprimer" onclick="deleteBooking(${b.id})">${ic('trash',16)}</button>
                     </div>

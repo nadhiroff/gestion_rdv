@@ -795,6 +795,51 @@ app.patch('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Rétablir une demande refusée ou annulée par le client : elle redevient « En attente ».
+// Toutes les règles d'une nouvelle demande sont revérifiées (date, jour ouvert, place, une demande par personne).
+// Une annulation rétablie ne compte plus dans la limite des annulations du client (cancelled_at remis à NULL).
+app.post('/api/admin/bookings/:id/restore', asyncHandler(async (req, res) => {
+  const LOCK = 'rdv_booking'; // même verrou que les réservations : pas de course avec un visiteur
+  const conn = await pool.getConnection();
+  try {
+    const [[{ ok }]] = await conn.query('SELECT GET_LOCK(?, 10) AS ok', [LOCK]);
+    if (ok !== 1) return res.status(503).json({ error: 'Serveur occupé, réessayez dans un instant.' });
+    try {
+      const [[b]] = await conn.query('SELECT * FROM bookings WHERE id = ?', [req.params.id]);
+      if (!b) return res.status(404).json({ error: 'Introuvable' });
+      if (!['rejected', 'cancelled'].includes(b.status)) {
+        return res.status(400).json({ error: 'Seule une demande refusée ou annulée peut être rétablie.' });
+      }
+      if (b.date < todayIso()) return res.status(409).json({ error: 'Impossible de rétablir : la date du rendez-vous est passée.' });
+
+      const settings = await getSettings();
+      const fermes = (settings.jours_fermes || '').split(',').filter(Boolean).map(Number);
+      if (fermes.includes(weekdayIndex(b.date)) || (await isDateBlocked(b.date))) {
+        return res.status(409).json({ error: 'Impossible de rétablir : ce jour est maintenant fermé ou bloqué.' });
+      }
+      const eff = effectiveForDate(settings, await getOverrideForDate(b.date));
+      if ((await countTaken(conn, b.date)) >= eff.max) {
+        return res.status(409).json({ error: 'Impossible de rétablir : la journée est complète (la place a été reprise entre-temps).' });
+      }
+      const [actives] = await conn.query(
+        "SELECT date, email, tel FROM bookings WHERE status IN ('pending','accepted') AND date >= ? AND id <> ?",
+        [todayIso(), b.id]
+      );
+      const autre = actives.find((r) => samePerson(r, b.email, b.tel));
+      if (autre) {
+        return res.status(409).json({ error: `Impossible de rétablir : cette personne a déjà une autre demande en cours (${formatDate(autre.date)}).` });
+      }
+      // On garde heure / durée / responsable éventuels : ils seront proposés à la prochaine acceptation
+      await conn.query("UPDATE bookings SET status = 'pending', cancelled_at = NULL WHERE id = ?", [b.id]);
+      res.json({ ok: true, id: b.id, status: 'pending' });
+    } finally {
+      await conn.query('SELECT RELEASE_LOCK(?)', [LOCK]);
+    }
+  } finally {
+    conn.release();
+  }
+}));
+
 app.delete('/api/admin/bookings/:id', asyncHandler(async (req, res) => {
   await pool.query('DELETE FROM bookings WHERE id = ?', [req.params.id]);
   res.json({ ok: true });
